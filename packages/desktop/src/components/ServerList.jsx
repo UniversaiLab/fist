@@ -5,7 +5,8 @@ import { RenameModal, EditProfileModal, EditSubscriptionModal, SubscriptionDetai
 import QrModal from './QrModal.jsx';
 import SubTestModal from './SubTestModal.jsx';
 import * as engine from '../finder/testEngine.js';
-import { formatBytes, relativeTime, subUsageInfo } from '../utils/format.js';
+import CoreLogic from '@soul-connection/core-logic';
+const { formatBytes, relativeTime, subUsageInfo } = CoreLogic;
 
 function pingClass(ms) {
   if (ms === undefined) return 'na';

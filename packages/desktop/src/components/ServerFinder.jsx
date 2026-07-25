@@ -1,8 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState, useSyncExternalStore, useCallback } from 'react';
 import Icon from './Icon.jsx';
-import { formatBytes, formatSpeed } from '../utils/format.js';
-import { countryOf } from '../utils/geo.js';
-import { PRIORITIES, priorityByKey, healthScore, extractMetrics, scoreTone, qualityEstimates, recommend } from '../utils/score.js';
+import CoreLogic from '@soul-connection/core-logic';
+const { formatBytes, formatSpeed, countryOf, PRIORITIES, priorityByKey, healthScore, extractMetrics, scoreTone, qualityEstimates, recommend } = CoreLogic;
 import * as engine from '../finder/testEngine.js';
 import TestDashboard from './TestDashboard.jsx';
 

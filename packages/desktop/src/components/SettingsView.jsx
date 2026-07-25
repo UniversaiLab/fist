@@ -1,6 +1,7 @@
 import React from 'react';
 import Icon from './Icon.jsx';
-import { formatBytes } from '../utils/format.js';
+import CoreLogic from '@soul-connection/core-logic';
+const { formatBytes } = CoreLogic;
 import { Section, Toggle } from './settingsPrimitives.jsx';
 import NetworkSettings from './NetworkSettings.jsx';
 

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import Icon from './Icon.jsx';
-import { formatBytes, formatSpeed } from '../utils/format.js';
+import CoreLogic from '@soul-connection/core-logic';
+const { formatBytes, formatSpeed } = CoreLogic;
 
 const SHORT_STATUS = {
   disconnected: 'Disconnected',

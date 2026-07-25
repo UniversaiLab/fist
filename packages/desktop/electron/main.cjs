@@ -3,8 +3,10 @@ const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, shell, Notificatio
 const path = require('path');
 const fs = require('fs');
 
-const { parseLink, parseMany, newId, parseSubscriptionUserinfo, buildCustomProfile } = require('./lib/parsers.cjs');
-const { buildSingboxConfig } = require('./lib/singboxConfig.cjs');
+const {
+  parseLink, parseMany, newId, parseSubscriptionUserinfo, buildCustomProfile,
+  buildSingboxConfig, DEFAULT_SETTINGS,
+} = require('@soul-connection/core-logic');
 const { SingBoxProcess } = require('./lib/singboxProcess.cjs');
 const systemProxy = require('./lib/systemProxy.cjs');
 const killSwitch = require('./lib/killSwitch.cjs');
@@ -19,33 +21,10 @@ const { isElevated, relaunchElevated } = require('./lib/elevation.cjs');
 const { StatsClient } = require('./lib/statsApi.cjs');
 const { initUpdater, checkForUpdates, downloadUpdate, quitAndInstall } = require('./lib/updater.cjs');
 
-const SOCKS_PORT = 10808;
-const HTTP_PORT = 10809;
 const API_PORT = 10810;
 const LATENCY_POLL_MS = 15000;
 const TRAFFIC_POLL_MS = 1000;
 const MAX_RECONNECT_ATTEMPTS = 5;
-
-const DEFAULT_SETTINGS = {
-  launchOnStartup: false,
-  runLocalProxyOnStartup: false, // replaces the old autoConnect (migrated in getSettings())
-  startMinimized: false,
-  restorePreviousSession: false, // renderer-owned UI state; main just persists/exposes it
-  minimizeToTray: true,
-  autoReconnect: true,
-  killSwitchEnabled: false,
-  subAutoUpdateInterval: 0, // ms; 0 = off
-  singboxLogLevel: 'warn',
-  socksPort: SOCKS_PORT, // preferred; auto-bumped to the next free port if taken
-  httpPort: HTTP_PORT,
-  socksHost: '127.0.0.1',
-  socksUsername: '',
-  socksPassword: '',
-  httpHost: '127.0.0.1',
-  httpUsername: '',
-  httpPassword: '',
-  customBypass: '', // extra semicolon-separated hosts/patterns added to the system-proxy bypass list
-};
 
 // True portable mode: electron-builder's portable Windows target sets
 // PORTABLE_EXECUTABLE_DIR (the folder containing the actual .exe, as opposed

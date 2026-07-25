@@ -23,7 +23,7 @@ function normLogUp(value, worst, best) {
 }
 
 // Speeds are bytes/second everywhere in this app.
-export const normalizers = {
+const normalizers = {
   latency: (ms) => normLog(ms, 40, 1200),
   jitter: (ms) => normLog(ms, 5, 300),
   first: (ms) => normLog(ms, 250, 8000),
@@ -34,7 +34,7 @@ export const normalizers = {
   stability: (pct) => (pct == null ? null : Math.round(clamp(pct, 0, 100))),
 };
 
-export const PRIORITIES = [
+const PRIORITIES = [
   { key: 'balanced', label: 'Balanced', icon: 'sliders', weights: { latency: 0.25, down: 0.25, stability: 0.15, loss: 0.15, jitter: 0.1, up: 0.1 } },
   { key: 'latency', label: 'Lowest Latency', icon: 'bolt', weights: { latency: 0.6, jitter: 0.25, loss: 0.15 } },
   { key: 'speed', label: 'Highest Speed', icon: 'gauge', weights: { down: 0.55, up: 0.2, latency: 0.15, stability: 0.1 } },
@@ -44,13 +44,13 @@ export const PRIORITIES = [
   { key: 'stable', label: 'Stability', icon: 'shield', weights: { stability: 0.35, loss: 0.3, jitter: 0.2, latency: 0.15 } },
 ];
 
-export function priorityByKey(key) {
+function priorityByKey(key) {
   return PRIORITIES.find((p) => p.key === key) || PRIORITIES[0];
 }
 
 // Collapses the three test modes into one metric set. Real-tunnel numbers win
 // over raw network numbers when both exist.
-export function extractMetrics(r) {
+function extractMetrics(r) {
   if (!r) return {};
   const ping = r.ping || null;
   const real = r.real || null;
@@ -68,7 +68,7 @@ export function extractMetrics(r) {
   };
 }
 
-export function healthScore(result, priorityKey = 'balanced') {
+function healthScore(result, priorityKey = 'balanced') {
   const metrics = extractMetrics(result);
   const { weights } = priorityByKey(priorityKey);
   let sum = 0;
@@ -83,7 +83,7 @@ export function healthScore(result, priorityKey = 'balanced') {
   return Math.round(sum / weightUsed);
 }
 
-export function scoreTone(score) {
+function scoreTone(score) {
   if (score == null) return 'na';
   if (score >= 75) return 'good';
   if (score >= 45) return 'mid';
@@ -93,7 +93,7 @@ export function scoreTone(score) {
 const mbps = (bps) => (bps == null ? null : (bps * 8) / 1e6);
 
 // Human quality estimates shown on speed-tested cards.
-export function qualityEstimates(result) {
+function qualityEstimates(result) {
   const m = extractMetrics(result);
   const down = mbps(m.down);
   const out = [];
@@ -119,7 +119,7 @@ export function qualityEstimates(result) {
 
 // Picks the winner for the recommendation banner. Requires an actual score
 // and penalizes servers whose tests failed outright.
-export function recommend(profiles, results, priorityKey) {
+function recommend(profiles, results, priorityKey) {
   let best = null;
   for (const p of profiles) {
     const r = results[p.id];
@@ -130,3 +130,5 @@ export function recommend(profiles, results, priorityKey) {
   }
   return best;
 }
+
+module.exports = { normalizers, PRIORITIES, priorityByKey, extractMetrics, healthScore, scoreTone, qualityEstimates, recommend };

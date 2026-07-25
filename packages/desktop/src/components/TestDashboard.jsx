@@ -1,8 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Icon from './Icon.jsx';
-import { formatSpeed } from '../utils/format.js';
-import { healthScore, priorityByKey, recommend } from '../utils/score.js';
-import { countryOf } from '../utils/geo.js';
+import CoreLogic from '@soul-connection/core-logic';
+const { formatSpeed, healthScore, priorityByKey, recommend, countryOf } = CoreLogic;
 import * as engine from '../finder/testEngine.js';
 
 const MODE_TITLES = { ping: 'Network Ping', real: 'Real Tunnel Ping', speed: 'Speed Benchmark' };

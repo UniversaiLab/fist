@@ -7,7 +7,10 @@ const pkg = require(path.join(root, 'package.json'));
 const productName = (pkg.build && pkg.build.productName) || pkg.productName || pkg.name;
 const exeName = `${productName}.exe`;
 
-const electronDist = path.join(root, 'node_modules', 'electron', 'dist');
+// require.resolve (not a hardcoded root/node_modules join) so this still
+// finds the package when npm workspaces hoists it to the repo root's
+// node_modules instead of this package's own.
+const electronDist = path.join(path.dirname(require.resolve('electron/package.json')), 'dist');
 const releaseDir = path.join(root, 'release');
 const buildOutputDir = path.join(releaseDir, `.builder-${process.pid}-${Date.now()}`);
 const outDir = path.join(buildOutputDir, 'win-unpacked');

@@ -1,0 +1,9 @@
+{
+  "name": "@soul-connection/core-logic",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Platform-agnostic profile parsing, sing-box config generation, and server-scoring logic shared between the desktop app and (eventually) the mobile app.",
+  "main": "index.js",
+  "type": "commonjs",
+  "license": "MIT"
+}

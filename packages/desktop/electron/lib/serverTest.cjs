@@ -12,7 +12,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
-const { buildSingboxConfig } = require('./singboxConfig.cjs');
+const { buildSingboxConfig } = require('@soul-connection/core-logic');
 const { SingBoxProcess } = require('./singboxProcess.cjs');
 const { findFreePort } = require('./freePort.cjs');
 

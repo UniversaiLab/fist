@@ -1,5 +1,4 @@
 'use strict';
-const crypto = require('crypto');
 
 function b64decode(s) {
   s = s.replace(/-/g, '+').replace(/_/g, '/').replace(/\s+/g, '');
@@ -11,8 +10,13 @@ function looksBase64(s) {
   return /^[A-Za-z0-9+/_\-=\s]+$/.test(s.trim());
 }
 
+// Plain Math.random() rather than Node's crypto module: these are opaque
+// local identifiers, not security tokens, and keeping this dependency-free
+// is what lets this package run unmodified in a React Native renderer too.
 function newId() {
-  return crypto.randomBytes(8).toString('hex');
+  let id = '';
+  for (let i = 0; i < 16; i++) id += Math.floor(Math.random() * 16).toString(16);
+  return id;
 }
 
 function safeUrl(link) {

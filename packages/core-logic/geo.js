@@ -54,7 +54,7 @@ function isoToFlag(iso) {
 
 const FLAG_RE = /[\u{1F1E6}-\u{1F1FF}]{2}/u;
 
-export function detectCountry(name) {
+function detectCountry(name) {
   if (!name) return null;
 
   // 1. A flag emoji in the name is authoritative.
@@ -88,9 +88,11 @@ const cache = new Map();
 
 // Memoized per profile: names are stable, and the finder calls this in hot
 // filter/sort paths for every keystroke.
-export function countryOf(profile) {
+function countryOf(profile) {
   if (!profile) return null;
   const key = profile.id + ' ' + (profile.name || '');
   if (!cache.has(key)) cache.set(key, detectCountry(profile.name || ''));
   return cache.get(key);
 }
+
+module.exports = { detectCountry, countryOf };

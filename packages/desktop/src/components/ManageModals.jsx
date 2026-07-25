@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import Icon from './Icon.jsx';
-import { formatBytes, relativeTime, subUsageInfo } from '../utils/format.js';
+import CoreLogic from '@soul-connection/core-logic';
+const { formatBytes, relativeTime, subUsageInfo } = CoreLogic;
 
 function Detail({ label, value, tone = 'na', ltr }) {
   return (

@@ -1,6 +1,8 @@
 // Dev-only stub of the preload bridge (window.soul) so the renderer can run
 // in a plain browser via `vite` without Electron. Never bundled into the app:
 // main.jsx only imports it when import.meta.env.DEV && !window.soul.
+import CoreLogic from '@soul-connection/core-logic';
+const { DEFAULT_SETTINGS } = CoreLogic;
 
 // `let`, not `const`: addCustomConfig below must REPLACE this with a new
 // array reference (not push() in place) so React's reference-equality check
@@ -23,26 +25,6 @@ const subscriptions = [
   { id: 's2', name: 'Free Backup', lastUpdated: Date.now() - 26 * 3600000, url: 'https://sub.soulnet.dev/free/xyz789', configCount: 3 },
 ];
 
-const DEFAULT_SETTINGS = {
-  launchOnStartup: false,
-  runLocalProxyOnStartup: false,
-  startMinimized: false,
-  restorePreviousSession: false,
-  minimizeToTray: true,
-  autoReconnect: true,
-  killSwitchEnabled: false,
-  subAutoUpdateInterval: 0,
-  singboxLogLevel: 'warn',
-  socksPort: 10808,
-  httpPort: 10809,
-  socksHost: '127.0.0.1',
-  socksUsername: '',
-  socksPassword: '',
-  httpHost: '127.0.0.1',
-  httpUsername: '',
-  httpPassword: '',
-  customBypass: '',
-};
 
 export function installDevMock() {
   let settings = { ...DEFAULT_SETTINGS };

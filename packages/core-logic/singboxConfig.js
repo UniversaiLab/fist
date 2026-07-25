@@ -143,8 +143,11 @@ function buildSingboxConfig(profile, opts = {}) {
     inbounds.push({
       type: 'tun',
       tag: 'tun-in',
-      // Windows ignores interface_name (wintun picks its own); macOS/Linux use it.
-      interface_name: process.platform === 'win32' ? undefined : 'scTun0',
+      // Windows ignores interface_name (wintun picks its own); macOS/Linux use
+      // it. `process` is a Node/Electron global, absent in a React Native
+      // renderer -- guarded so this module still loads there (mobile has its
+      // own native VPN path and never actually hits TUN mode through here).
+      interface_name: (typeof process !== 'undefined' && process.platform === 'win32') ? undefined : 'scTun0',
       address: ['172.19.0.1/30'],
       mtu: 1500,
       auto_route: true,

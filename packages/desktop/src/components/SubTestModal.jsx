@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
 import * as engine from '../finder/testEngine.js';
-import { recommend } from '../utils/score.js';
+import CoreLogic from '@soul-connection/core-logic';
+const { recommend } = CoreLogic;
 import TestDashboard from './TestDashboard.jsx';
 
 const PRIORITY = 'balanced';

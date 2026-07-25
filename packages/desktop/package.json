@@ -1,0 +1,101 @@
+{
+  "name": "soul-connection",
+  "productName": "Soul Connection",
+  "version": "1.0.3",
+  "description": "A modern cross-platform VLESS/Trojan/Shadowsocks/Hysteria2 client powered by sing-box",
+  "main": "electron/main.cjs",
+  "author": "Soul",
+  "license": "MIT",
+  "scripts": {
+    "build:ui": "vite build",
+    "start": "npm run build:ui && electron .",
+    "dev": "vite build && electron .",
+    "dist": "node scripts/build-exe.cjs",
+    "dist:publish": "node scripts/build-exe.cjs --publish",
+    "dist:portable": "node scripts/build-exe.cjs --portable",
+    "dist:mac": "node scripts/build-exe.cjs --mac",
+    "dist:linux": "node scripts/build-exe.cjs --linux"
+  },
+  "dependencies": {
+    "@grpc/grpc-js": "^1.12.2",
+    "@grpc/proto-loader": "^0.7.13",
+    "@soul-connection/core-logic": "*",
+    "electron-updater": "^6.3.9",
+    "qrcode": "^1.5.4"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "vite": "^5.4.11"
+  },
+  "build": {
+    "appId": "com.kasra.soulconnection",
+    "productName": "Soul Connection",
+    "electronVersion": "33.4.11",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "electron/**/*",
+      "dist/**/*"
+    ],
+    "win": {
+      "target": "nsis",
+      "requestedExecutionLevel": "asInvoker",
+      "icon": "electron/assets/icon.ico",
+      "extraResources": [
+        {
+          "from": "bin/win32",
+          "to": "bin"
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "electron/assets/icon.ico",
+      "uninstallerIcon": "electron/assets/icon.ico"
+    },
+    "portable": {
+      "artifactName": "${productName}-Portable-${version}.${ext}"
+    },
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "category": "public.app-category.utilities",
+      "icon": "public/icon-256.png",
+      "extraResources": [
+        {
+          "from": "bin/darwin",
+          "to": "bin"
+        }
+      ]
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "Network",
+      "icon": "public/icon-256.png",
+      "extraResources": [
+        {
+          "from": "bin/linux",
+          "to": "bin"
+        }
+      ]
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "mrsoulcommunity",
+        "repo": "Fullstack-Soul-Connection"
+      }
+    ]
+  }
+}
