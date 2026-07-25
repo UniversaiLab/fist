@@ -12,7 +12,7 @@ const INTERVAL_OPTIONS = [
 ];
 
 const LOG_LEVELS = [
-  { value: 'warning', label: 'هشدار (پیش‌فرض)' },
+  { value: 'warn', label: 'هشدار (پیش‌فرض)' },
   { value: 'info', label: 'اطلاعات' },
   { value: 'debug', label: 'دیباگ' },
 ];
@@ -162,15 +162,15 @@ export default function SettingsView({
         </div>
       </Section>
 
-      <Section title="پیشرفته" icon="sliders" description="لاگ‌ها و تنظیمات فنی Xray">
+      <Section title="پیشرفته" icon="sliders" description="لاگ‌ها و تنظیمات فنی sing-box">
         <div className="setting-row">
           <div className="setting-text">
-            <span className="setting-label">سطح لاگ Xray</span>
+            <span className="setting-label">سطح لاگ sing-box</span>
           </div>
           <select
             className="setting-select"
-            value={settings.xrayLogLevel}
-            onChange={(e) => onUpdate({ xrayLogLevel: e.target.value })}
+            value={settings.singboxLogLevel}
+            onChange={(e) => onUpdate({ singboxLogLevel: e.target.value })}
           >
             {LOG_LEVELS.map((o) => (
               <option key={o.value} value={o.value}>{o.label}</option>

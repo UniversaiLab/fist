@@ -496,7 +496,7 @@ export default function App() {
             <div className="brand">
               <span className="brand-name">Soul Connection</span>
               <span className="brand-sub">
-                {profiles.length ? `${profiles.length} کانفیگ` : 'کلاینت V2Ray / Xray'}
+                {profiles.length ? `${profiles.length} کانفیگ` : 'کلاینت sing-box'}
               </span>
             </div>
           </header>

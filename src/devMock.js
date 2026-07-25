@@ -32,7 +32,7 @@ const DEFAULT_SETTINGS = {
   autoReconnect: true,
   killSwitchEnabled: false,
   subAutoUpdateInterval: 0,
-  xrayLogLevel: 'warning',
+  singboxLogLevel: 'warn',
   socksPort: 10808,
   httpPort: 10809,
   socksHost: '127.0.0.1',
@@ -127,7 +127,7 @@ export function installDevMock() {
       settings,
       systemProxyEnabled,
     }),
-    getAppInfo: async () => ({ version: '2.0.0-dev', xrayVersion: '25.1.30' }),
+    getAppInfo: async () => ({ version: '2.0.0-dev', singboxVersion: '1.13.14' }),
     connect: async (id) => {
       state = { ...state, activeProfileId: id, connectionState: 'connecting' };
       emitState();

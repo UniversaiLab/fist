@@ -222,7 +222,7 @@ export default function NetworkSettings({
         <div className="setting-row">
           <div className="setting-text">
             <span className="setting-label">پوشه‌ی پروکسی</span>
-            <span className="setting-hint">کانفیگ فعال و لاگ‌های خام Xray</span>
+            <span className="setting-hint">کانفیگ فعال و لاگ‌های خام sing-box</span>
           </div>
           <button className="btn icon-inline-btn" onClick={onOpenProxyFolder}>
             <Icon name="folder" size={14} />

@@ -15,6 +15,7 @@ const shouldPublish = process.argv.includes('--publish');
 const portable = process.argv.includes('--portable');
 const winTarget = portable ? 'portable' : 'nsis';
 const staleBuildDirPrefix = '.builder-';
+const target = process.argv.includes('--mac') ? 'mac' : process.argv.includes('--linux') ? 'linux' : 'win';
 
 function run(cmd) {
   console.log(`\n> ${cmd}`);
@@ -95,6 +96,16 @@ const buildStartedAt = Date.now();
 
 // 1. Build the UI bundle
 run('npx vite build');
+
+// mac/linux never hit the antivirus-interference the Windows path below works
+// around (that's a Windows-Defender-specific issue observed on this project's
+// own build machine), so they just run electron-builder directly.
+if (target === 'mac' || target === 'linux') {
+  console.log(`\nBuilding the ${target} package${shouldPublish ? ' and publishing' : ''}...`);
+  run(`npx electron-builder --${target}${shouldPublish ? ' --publish always' : ''}`);
+  console.log('\nBuild finished successfully.');
+  process.exit(0);
+}
 
 // 2. Build into a unique temporary output directory. Reusing
 //    release/win-unpacked makes portable builds fragile on Windows because a

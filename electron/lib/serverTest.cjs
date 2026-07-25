@@ -1,7 +1,7 @@
 'use strict';
 // Server evaluation engine behind the "سرور یاب" (Server Finder):
 //   Mode 1  pingStats  — ICMP (best effort) + TCP latency samples → avg/min/max/jitter/loss
-//   Mode 2  realPing   — boots a throwaway xray instance for the profile and measures
+//   Mode 2  realPing   — boots a throwaway sing-box instance for the profile and measures
 //                        the latency actually experienced through the tunnel
 //   Mode 3  speedTest  — benchmarks download/upload throughput through the tunnel
 // Every entry point takes a caller-provided token so an in-flight test can be
@@ -12,8 +12,8 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
-const { buildXrayConfig } = require('./xrayConfig.cjs');
-const { XrayProcess } = require('./xrayProcess.cjs');
+const { buildSingboxConfig } = require('./singboxConfig.cjs');
+const { SingBoxProcess } = require('./singboxProcess.cjs');
 const { findFreePort } = require('./freePort.cjs');
 
 const SPEED_HOST = 'speed.cloudflare.com';
@@ -99,14 +99,30 @@ function tcpPingOnce(address, port, timeoutMs, signal) {
   });
 }
 
-// Windows ping.exe with locale-tolerant parsing: reply lines are detected by
-// the untranslated "TTL=" marker and times by the trailing "<n>ms" token.
+// ping's flags (and reply-time formatting) differ per OS: Windows uses
+// `-n`/`-w` (timeout in ms) and prints "time=12ms"/"time<1ms"; Linux/macOS use
+// `-c`/`-W`|`-t` (timeout in seconds) and print "time=12.3 ms" (decimal, space
+// before the unit). Reply-line detection stays on the "ttl=" marker (matched
+// case-insensitively so it covers both Windows' "TTL=" and Linux/macOS'
+// lowercase "ttl="), which is present untranslated on every platform.
+function icmpPingArgs(address, count, timeoutMs) {
+  if (process.platform === 'win32') {
+    return ['-n', String(count), '-w', String(timeoutMs), address];
+  }
+  const timeoutSec = String(Math.max(1, Math.ceil(timeoutMs / 1000)));
+  if (process.platform === 'darwin') {
+    // macOS ping has no per-packet timeout flag; -t caps the whole run.
+    return ['-c', String(count), '-t', String(Math.max(1, Math.ceil((timeoutMs * count) / 1000))), address];
+  }
+  return ['-c', String(count), '-W', timeoutSec, address];
+}
+
 function icmpPingStats(address, { count = 4, timeoutMs = 3000, signal } = {}) {
   return new Promise((resolve) => {
     let out = '';
     let proc;
     try {
-      proc = spawn('ping', ['-n', String(count), '-w', String(timeoutMs), address], { windowsHide: true });
+      proc = spawn('ping', icmpPingArgs(address, count, timeoutMs), { windowsHide: true });
     } catch {
       return resolve(null);
     }
@@ -118,8 +134,8 @@ function icmpPingStats(address, { count = 4, timeoutMs = 3000, signal } = {}) {
       if (signal) signal.removeEventListener('abort', onAbort);
       const samples = [];
       for (const line of out.split(/\r?\n/)) {
-        if (!/TTL=/i.test(line)) continue;
-        const m = line.match(/[=<](\d+)\s*ms/i);
+        if (!/ttl=/i.test(line)) continue;
+        const m = line.match(/[=<](\d+(?:\.\d+)?)\s*ms/i);
         if (m) samples.push(Number(m[1]));
       }
       if (!samples.length) return resolve(null);
@@ -168,25 +184,25 @@ async function pingStats(profile, opts = {}) {
 // collide with the live session (ports 10808+) or with each other.
 let nextTestPortBase = 24000;
 
-async function startTestTunnel(profile, { xrayBin, workRoot, signal }) {
+async function startTestTunnel(profile, { singboxBin, workRoot, signal }) {
   throwIfAborted(signal);
   const base = nextTestPortBase;
   nextTestPortBase = base + 4 > 29000 ? 24000 : base + 4;
   const socksPort = await findFreePort(base);
   const httpPort = await findFreePort(socksPort + 1);
   const workDir = path.join(workRoot, `test-${socksPort}-${Date.now()}`);
-  const config = buildXrayConfig(profile, { socksPort, httpPort, mode: 'proxy', logLevel: 'warning' });
+  const config = buildSingboxConfig(profile, { socksPort, httpPort, mode: 'proxy', logLevel: 'warn' });
 
-  const xp = new XrayProcess(xrayBin, workDir);
+  const sp = new SingBoxProcess(singboxBin, workDir);
   const bootStart = Date.now();
   const cleanup = async () => {
-    try { await xp.stop(); } catch { /* ignore */ }
+    try { await sp.stop(); } catch { /* ignore */ }
     try { fs.rmSync(workDir, { recursive: true, force: true }); } catch { /* ignore */ }
   };
   const onAbort = () => { cleanup(); };
   if (signal) signal.addEventListener('abort', onAbort);
   try {
-    await xp.start(config);
+    await sp.start(config);
   } catch (err) {
     if (signal) signal.removeEventListener('abort', onAbort);
     await cleanup();
@@ -231,9 +247,9 @@ function probeViaProxy(httpPort, timeoutMs, signal) {
 
 // ---- Mode 2: real configuration ping ----
 
-async function realPing(profile, { xrayBin, workRoot, signal, emit = () => {}, warmCount = 5 } = {}) {
+async function realPing(profile, { singboxBin, workRoot, signal, emit = () => {}, warmCount = 5 } = {}) {
   emit('phase', { phase: 'boot' });
-  const tunnel = await startTestTunnel(profile, { xrayBin, workRoot, signal });
+  const tunnel = await startTestTunnel(profile, { singboxBin, workRoot, signal });
   try {
     throwIfAborted(signal);
     emit('phase', { phase: 'reach' });
@@ -456,9 +472,9 @@ async function measureUpload(httpPort, { bytes, signal, emit }) {
   });
 }
 
-async function speedTest(profile, { xrayBin, workRoot, signal, emit = () => {}, downloadMs = 8000 } = {}) {
+async function speedTest(profile, { singboxBin, workRoot, signal, emit = () => {}, downloadMs = 8000 } = {}) {
   emit('phase', { phase: 'boot' });
-  const tunnel = await startTestTunnel(profile, { xrayBin, workRoot, signal });
+  const tunnel = await startTestTunnel(profile, { singboxBin, workRoot, signal });
   try {
     // Warm the tunnel and grab its RTT while we're at it.
     emit('phase', { phase: 'warmup' });

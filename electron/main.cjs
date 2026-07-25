@@ -4,8 +4,8 @@ const path = require('path');
 const fs = require('fs');
 
 const { parseLink, parseMany, newId, parseSubscriptionUserinfo, buildCustomProfile } = require('./lib/parsers.cjs');
-const { buildXrayConfig } = require('./lib/xrayConfig.cjs');
-const { XrayProcess } = require('./lib/xrayProcess.cjs');
+const { buildSingboxConfig } = require('./lib/singboxConfig.cjs');
+const { SingBoxProcess } = require('./lib/singboxProcess.cjs');
 const systemProxy = require('./lib/systemProxy.cjs');
 const killSwitch = require('./lib/killSwitch.cjs');
 const { tcpPing } = require('./lib/pingTest.cjs');
@@ -35,7 +35,7 @@ const DEFAULT_SETTINGS = {
   autoReconnect: true,
   killSwitchEnabled: false,
   subAutoUpdateInterval: 0, // ms; 0 = off
-  xrayLogLevel: 'warning',
+  singboxLogLevel: 'warn',
   socksPort: SOCKS_PORT, // preferred; auto-bumped to the next free port if taken
   httpPort: HTTP_PORT,
   socksHost: '127.0.0.1',
@@ -69,23 +69,27 @@ const store = new JsonStore(path.join(userDataDir, 'profiles.json'), {
   systemProxyEnabled: false, // app-owned live state, not a user preference -- set only by systemProxy:enable/disable and the disconnect safety net
 });
 
-const xrayBin = app.isPackaged
-  ? path.join(process.resourcesPath, 'bin', 'xray.exe')
-  : path.join(__dirname, '..', 'bin', 'xray.exe');
-const xrayWorkDir = path.join(userDataDir, 'xray-run');
+// sing-box ships one binary per OS -- 'sing-box.exe' on Windows, extensionless
+// 'sing-box' on macOS/Linux, namespaced by platform so a dev checkout can hold
+// binaries for more than one OS at once.
+const SINGBOX_BIN_NAME = process.platform === 'win32' ? 'sing-box.exe' : 'sing-box';
+const singboxBin = app.isPackaged
+  ? path.join(process.resourcesPath, 'bin', SINGBOX_BIN_NAME)
+  : path.join(__dirname, '..', 'bin', process.platform, SINGBOX_BIN_NAME);
+const singboxWorkDir = path.join(userDataDir, 'singbox-run');
 
-const xray = new XrayProcess(xrayBin, xrayWorkDir);
+const singbox = new SingBoxProcess(singboxBin, singboxWorkDir);
 
 // Local proxy log panel (Network settings): keep a capped ring buffer so a
 // freshly opened panel isn't empty, and forward each line live.
 const MAX_PROXY_LOGS = 300;
 let proxyLogRing = [];
-xray.on('log', (text) => {
+singbox.on('log', (text) => {
   const entry = { t: Date.now(), text: text.trim() };
   proxyLogRing.push(entry);
   if (proxyLogRing.length > MAX_PROXY_LOGS) proxyLogRing.splice(0, proxyLogRing.length - MAX_PROXY_LOGS);
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('proxy-log', entry);
-  if (process.env.SC_DEBUG) console.log('[xray]', entry.text);
+  if (process.env.SC_DEBUG) console.log('[singbox]', entry.text);
 });
 
 let mainWindow = null;
@@ -404,8 +408,11 @@ function findProfile(id) {
 async function connect(profileId) {
   const profile = findProfile(profileId);
   if (!profile) throw new Error('کانفیگ پیدا نشد');
-  if (!fs.existsSync(xrayBin)) {
-    throw new Error('فایل xray.exe پیدا نشد. احتمالاً آنتی‌ویروس آن را حذف یا قرنطینه کرده. لطفاً پوشه‌ی برنامه را به لیست استثناهای آنتی‌ویروس اضافه کن و برنامه را دوباره نصب/اجرا کن.');
+  if (profile.protocol === 'mtproto') {
+    throw new Error('کانفیگ‌های MTProto قابل تانل کردن نیستند؛ آن‌ها را مستقیماً در تلگرام استفاده کن');
+  }
+  if (!fs.existsSync(singboxBin)) {
+    throw new Error('فایل هسته‌ی اتصال (sing-box) پیدا نشد. احتمالاً آنتی‌ویروس آن را حذف یا قرنطینه کرده. لطفاً پوشه‌ی برنامه را به لیست استثناهای آنتی‌ویروس اضافه کن و برنامه را دوباره نصب/اجرا کن.');
   }
   if (connectionState === 'connected' || connectionState === 'connecting') {
     await disconnect();
@@ -419,16 +426,16 @@ async function connect(profileId) {
     const preferredHttp = settings.httpPort === socksPort ? settings.httpPort + 1 : settings.httpPort;
     const httpPort = await findFreePort(preferredHttp);
     const apiPort = await findFreePort(API_PORT === socksPort || API_PORT === httpPort ? httpPort + 1 : API_PORT);
-    const config = buildXrayConfig(profile, {
-      socksPort, httpPort, apiPort, mode, logLevel: settings.xrayLogLevel,
+    const config = buildSingboxConfig(profile, {
+      socksPort, httpPort, apiPort, mode, logLevel: settings.singboxLogLevel,
       socksHost: settings.socksHost, httpHost: settings.httpHost,
       socksAccounts: settings.socksUsername ? [{ user: settings.socksUsername, pass: settings.socksPassword || '' }] : undefined,
       httpAccounts: settings.httpUsername ? [{ user: settings.httpUsername, pass: settings.httpPassword || '' }] : undefined,
     });
-    // Connecting only starts the local proxy (xray) -- System Proxy is a fully
-    // separate, user-controlled toggle (see systemProxy:enable/disable below)
-    // so flipping it on/off never restarts the tunnel.
-    await xray.start(config);
+    // Connecting only starts the local proxy (sing-box) -- System Proxy is a
+    // fully separate, user-controlled toggle (see systemProxy:enable/disable
+    // below) so flipping it on/off never restarts the tunnel.
+    await singbox.start(config);
     store.set('activeProfileId', profileId);
     store.set('activeMode', mode);
     {
@@ -456,7 +463,7 @@ async function connect(profileId) {
       throw new Error('حالت تانل نیاز به اجرای برنامه با دسترسی مدیر (Administrator) دارد');
     }
     if (err.code === 'ENOENT') {
-      throw new Error('فایل xray.exe پیدا نشد. احتمالاً آنتی‌ویروس آن را حذف یا قرنطینه کرده. لطفاً پوشه‌ی برنامه را به لیست استثناهای آنتی‌ویروس اضافه کن و برنامه را دوباره نصب/اجرا کن.');
+      throw new Error('فایل هسته‌ی اتصال (sing-box) پیدا نشد. احتمالاً آنتی‌ویروس آن را حذف یا قرنطینه کرده. لطفاً پوشه‌ی برنامه را به لیست استثناهای آنتی‌ویروس اضافه کن و برنامه را دوباره نصب/اجرا کن.');
     }
     throw err;
   }
@@ -478,7 +485,12 @@ async function disableSystemProxySafetyNet() {
 async function applyKillSwitchBlock() {
   if (killSwitchBlocking) return;
   try {
-    await killSwitch.enable(xrayBin);
+    // Windows Firewall matches sing-box's own process directly and ignores
+    // this; macOS (pf) and Linux (nftables) have no per-process matching, so
+    // they instead allow-list the active profile's own remote endpoint.
+    const profile = findProfile(store.get('activeProfileId'));
+    const remote = profile ? { host: profile.address, port: profile.port } : null;
+    await killSwitch.enable(singboxBin, remote);
     killSwitchBlocking = true;
   } catch (err) {
     notify('خطا در Kill Switch', 'مسدودسازی ترافیک ناموفق بود: ' + (err.message || ''));
@@ -502,7 +514,7 @@ async function disconnect() {
   sendState();
   await disableSystemProxySafetyNet();
   expectedExit = true;
-  await xray.stop();
+  await singbox.stop();
   connectionState = 'disconnected';
   persistSessionTraffic();
   currentPorts = null;
@@ -517,7 +529,7 @@ async function disconnect() {
 
 // Detects the tunnel dropping on its own (crash, server-side kick, network
 // change) as opposed to a user-initiated disconnect, and tries to recover.
-xray.on('exit', async () => {
+singbox.on('exit', async () => {
   if (expectedExit) { expectedExit = false; return; }
   if (connectionState !== 'connected') return;
 
@@ -563,7 +575,7 @@ xray.on('exit', async () => {
         await systemProxy.enable('127.0.0.1', currentPorts.httpPort, systemProxy.buildBypass(getSettings().customBypass));
       } catch { /* ignore */ }
     }
-  } catch { /* xray's own 'exit' event will fire again and retry, up to the cap */ }
+  } catch { /* singbox's own 'exit' event will fire again and retry, up to the cap */ }
 });
 
 app.whenReady().then(async () => {
@@ -874,6 +886,14 @@ function requireProfile(profileId) {
   return profile;
 }
 
+function requireTunnelableProfile(profileId) {
+  const profile = requireProfile(profileId);
+  if (profile.protocol === 'mtproto') {
+    throw new Error('کانفیگ‌های MTProto قابل تانل کردن نیستند');
+  }
+  return profile;
+}
+
 ipcMain.handle('test:ping', async (_e, { profileId, token }) => {
   const profile = requireProfile(profileId);
   const signal = serverTest.begin(token);
@@ -888,11 +908,11 @@ ipcMain.handle('test:ping', async (_e, { profileId, token }) => {
 });
 
 ipcMain.handle('test:real', async (_e, { profileId, token }) => {
-  const profile = requireProfile(profileId);
+  const profile = requireTunnelableProfile(profileId);
   const signal = serverTest.begin(token);
   try {
     return await serverTest.realPing(profile, {
-      xrayBin, workRoot: xrayWorkDir, signal,
+      singboxBin, workRoot: singboxWorkDir, signal,
       emit: (type, data) => emitTestEvent(token, type, data),
     });
   } finally {
@@ -901,11 +921,11 @@ ipcMain.handle('test:real', async (_e, { profileId, token }) => {
 });
 
 ipcMain.handle('test:speed', async (_e, { profileId, token }) => {
-  const profile = requireProfile(profileId);
+  const profile = requireTunnelableProfile(profileId);
   const signal = serverTest.begin(token);
   try {
     return await serverTest.speedTest(profile, {
-      xrayBin, workRoot: xrayWorkDir, signal,
+      singboxBin, workRoot: singboxWorkDir, signal,
       emit: (type, data) => emitTestEvent(token, type, data),
     });
   } finally {
@@ -931,7 +951,7 @@ ipcMain.handle('subscriptions:refreshAll', async () => {
 
 ipcMain.handle('settings:get', () => getSettings());
 
-const LOG_LEVELS = new Set(['none', 'error', 'warning', 'info', 'debug']);
+const LOG_LEVELS = new Set(['none', 'error', 'warn', 'info', 'debug']);
 const BOOLEAN_SETTINGS = new Set([
   'launchOnStartup', 'runLocalProxyOnStartup', 'startMinimized', 'restorePreviousSession',
   'minimizeToTray', 'autoReconnect', 'killSwitchEnabled',
@@ -961,7 +981,7 @@ ipcMain.handle('settings:update', async (_e, patch) => {
       if (typeof value !== 'boolean') continue;
     } else if (key === 'subAutoUpdateInterval') {
       if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) continue;
-    } else if (key === 'xrayLogLevel') {
+    } else if (key === 'singboxLogLevel') {
       if (!LOG_LEVELS.has(value)) continue;
     } else if (PORT_SETTINGS.has(key)) {
       if (!isValidPort(value)) continue;
@@ -1016,16 +1036,16 @@ ipcMain.handle('settings:update', async (_e, patch) => {
 });
 
 ipcMain.handle('app:openLogsFolder', () => {
-  shell.openPath(xrayWorkDir);
+  shell.openPath(singboxWorkDir);
 });
 
 ipcMain.handle('app:openProxyFolder', () => {
-  shell.openPath(xrayWorkDir);
+  shell.openPath(singboxWorkDir);
 });
 
 // System Proxy is fully decoupled from the tunnel: enabling it only points
 // Windows at the already-running local proxy, disabling it only resets the
-// registry -- neither one starts/stops xray.
+// registry -- neither one starts/stops sing-box.
 ipcMain.handle('systemProxy:enable', async () => {
   if (connectionState !== 'connected' || !currentPorts) {
     throw new Error('اول باید پروکسی محلی را روشن کنی (به یک سرور وصل شو)');

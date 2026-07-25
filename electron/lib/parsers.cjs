@@ -172,6 +172,60 @@ function parseSS(link) {
   return p;
 }
 
+// Hysteria2's own URI scheme: hysteria2://[auth]@host:port/?insecure=&sni=&
+// obfs=salamander&obfs-password=&pinSHA256=&up=&down=#name -- "hy2://" is an
+// accepted alias for the same thing.
+function parseHysteria2(link) {
+  const u = safeUrl(link);
+  if (!u || !u.hostname) return null;
+  const p = baseProfile('hysteria2', link);
+  p.password = decodeURIComponent(u.username || '');
+  p.address = u.hostname.replace(/^\[|\]$/g, '');
+  p.port = Number(u.port) || 443;
+  p.name = decodeURIComponent(u.hash.slice(1)) || `${p.address}:${p.port}`;
+  p.security = 'tls';
+  p.sni = q(u, 'sni') || q(u, 'peer') || '';
+  p.allowInsecure = q(u, 'insecure') === '1' || q(u, 'insecure') === 'true';
+  p.obfsPassword = q(u, 'obfs') && q(u, 'obfs').toLowerCase() !== 'none' ? (q(u, 'obfs-password') || q(u, 'obfsParam') || '') : '';
+  p.upMbps = Number(q(u, 'up') || q(u, 'upmbps')) || 0;
+  p.downMbps = Number(q(u, 'down') || q(u, 'downmbps')) || 0;
+  return p;
+}
+
+// MTProto proxies are consumed directly by Telegram (server/port/secret),
+// never tunneled system-wide, so this only ever powers parse/store/QR-export
+// (see AddModal.jsx/QrModal.jsx), not a connectable profile.
+function parseMtproto(link) {
+  let server = '';
+  let port = 0;
+  let secret = '';
+  let name = '';
+  if (link.startsWith('mtproto://')) {
+    const u = safeUrl(link);
+    if (!u || !u.hostname) return null;
+    server = u.hostname;
+    port = Number(u.port) || 443;
+    secret = q(u, 'secret') || decodeURIComponent(u.username || '');
+    name = decodeURIComponent(u.hash.slice(1)) || '';
+  } else {
+    // tg://proxy?server=&port=&secret=  or  https://t.me/proxy?server=&port=&secret=
+    const u = safeUrl(link);
+    if (!u) return null;
+    server = q(u, 'server');
+    port = Number(q(u, 'port')) || 443;
+    secret = q(u, 'secret');
+    name = decodeURIComponent(u.hash.slice(1)) || '';
+  }
+  if (!server || !secret) return null;
+  const p = baseProfile('mtproto', link);
+  p.address = server;
+  p.port = port;
+  p.secret = secret;
+  p.tunnelable = false;
+  p.name = name || `${server}:${port}`;
+  return p;
+}
+
 function parseLink(link) {
   link = String(link || '').trim();
   if (!link) return null;
@@ -180,6 +234,9 @@ function parseLink(link) {
     if (link.startsWith('vless://')) return parseVless(link);
     if (link.startsWith('trojan://')) return parseTrojan(link);
     if (link.startsWith('ss://')) return parseSS(link);
+    if (link.startsWith('hysteria2://') || link.startsWith('hy2://')) return parseHysteria2(link);
+    if (link.startsWith('mtproto://')) return parseMtproto(link);
+    if (link.startsWith('tg://proxy') || /^https:\/\/t\.me\/proxy/i.test(link)) return parseMtproto(link);
   } catch {
     return null;
   }
@@ -306,12 +363,33 @@ function b64UrlEncode(s) {
   return Buffer.from(s, 'utf8').toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
+function buildHysteria2Link(p) {
+  const pairs = [
+    ['sni', p.sni || undefined],
+    ['insecure', p.allowInsecure ? '1' : undefined],
+    ['obfs', p.obfsPassword ? 'salamander' : undefined],
+    ['obfs-password', p.obfsPassword || undefined],
+    ['up', p.upMbps || undefined],
+    ['down', p.downMbps || undefined],
+  ];
+  const name = encodeURIComponent(p.name || '');
+  return `hysteria2://${encodeURIComponent(p.password)}@${p.address}:${p.port}${qs(pairs)}#${name}`;
+}
+
+function buildMtprotoLink(p) {
+  const pairs = [['server', p.address], ['port', p.port], ['secret', p.secret]];
+  const name = encodeURIComponent(p.name || '');
+  return `tg://proxy${qs(pairs)}#${name}`;
+}
+
 function buildLink(p) {
   switch (p.protocol) {
     case 'vmess': return buildVmessLink(p);
     case 'vless': return buildVlessLink(p);
     case 'trojan': return buildTrojanLink(p);
     case 'shadowsocks': return buildSsLink(p);
+    case 'hysteria2': return buildHysteria2Link(p);
+    case 'mtproto': return buildMtprotoLink(p);
     default: return null;
   }
 }
