@@ -9,23 +9,23 @@ import TestDashboard from './TestDashboard.jsx';
 const RECENT_KEY = 'soul.finder.recent.v1';
 
 const MODES = [
-  { key: 'ping', icon: 'signal', title: 'پینگ شبکه', desc: 'ICMP و TCP — سریع، فقط تاخیر شبکه' },
-  { key: 'real', icon: 'radar', title: 'پینگ واقعی', desc: 'اتصال واقعی با کانفیگ و سنجش تاخیر از داخل تونل' },
-  { key: 'speed', icon: 'gauge', title: 'تست سرعت', desc: 'بنچمارک دانلود و آپلود از داخل تونل' },
+  { key: 'ping', icon: 'signal', title: 'Network Ping', desc: 'ICMP and TCP — fast, network latency only' },
+  { key: 'real', icon: 'radar', title: 'Real Ping', desc: 'Real connection with the config, latency measured from inside the tunnel' },
+  { key: 'speed', icon: 'gauge', title: 'Speed Test', desc: 'Download/upload benchmark from inside the tunnel' },
 ];
 
 const SORTS = [
-  ['score', 'بهترین امتیاز'],
-  ['ping', 'کمترین پینگ'],
-  ['real', 'کمترین پینگ واقعی'],
-  ['down', 'بیشترین سرعت دانلود'],
-  ['loss', 'کمترین از‌دست‌رفت'],
-  ['stability', 'پایدارترین'],
-  ['boot', 'سریع‌ترین برقراری'],
-  ['fav', 'موردعلاقه‌ها'],
-  ['recent', 'اخیرا استفاده‌شده'],
-  ['country', 'کشور'],
-  ['name', 'نام'],
+  ['score', 'Best score'],
+  ['ping', 'Lowest ping'],
+  ['real', 'Lowest real ping'],
+  ['down', 'Highest download speed'],
+  ['loss', 'Lowest packet loss'],
+  ['stability', 'Most stable'],
+  ['boot', 'Fastest boot'],
+  ['fav', 'Favorites'],
+  ['recent', 'Recently used'],
+  ['country', 'Country'],
+  ['name', 'Name'],
 ];
 
 function loadRecent() {
@@ -36,7 +36,7 @@ function saveRecent(list) {
 }
 
 const fmtMs = (v) => (v == null ? '—' : `${v}ms`);
-const fmtPct = (v) => (v == null ? '—' : `${v}٪`);
+const fmtPct = (v) => (v == null ? '—' : `${v}%`);
 const mbps = (bps) => (bps == null ? '—' : `${((bps * 8) / 1e6).toFixed(1)} Mb`);
 
 function msTone(v) {
@@ -50,8 +50,8 @@ function msTone(v) {
 function fmtEta(ms) {
   if (ms == null) return null;
   const s = Math.ceil(ms / 1000);
-  if (s < 60) return `~${s} ثانیه`;
-  return `~${Math.ceil(s / 60)} دقیقه`;
+  if (s < 60) return `~${s}s`;
+  return `~${Math.ceil(s / 60)}m`;
 }
 
 /* ---------- small SVG widgets ---------- */
@@ -61,7 +61,7 @@ function ScoreRing({ score }) {
   const C = 2 * Math.PI * 13;
   const off = score == null ? C : C * (1 - score / 100);
   return (
-    <div className={`score-ring tone-${tone}`} title="امتیاز سلامت (۰ تا ۱۰۰)">
+    <div className={`score-ring tone-${tone}`} title="Health score (0-100)">
       <svg viewBox="0 0 32 32" aria-hidden="true">
         <circle className="ring-bg" cx="16" cy="16" r="13" />
         <circle className="ring-val" cx="16" cy="16" r="13" strokeDasharray={C} strokeDashoffset={off} />
@@ -115,7 +115,7 @@ function SpeedDash({ active }) {
           <circle className="g-hub" cx="50" cy="52" r="3.5" />
         </svg>
         <div className="g-read mono">{formatSpeed(active.bps)}</div>
-        <div className="g-dir">{active.dir === 'down' ? '↓ دانلود' : '↑ آپلود'}</div>
+        <div className="g-dir">{active.dir === 'down' ? '↓ Download' : '↑ Upload'}</div>
       </div>
       <svg className={`speed-area ${active.dir}`} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-hidden="true">
         {area && <polygon points={area} />}
@@ -142,7 +142,7 @@ const ResultCard = React.memo(function ResultCard({ index, profile, sub, result,
       <div className="fcard-row">
         <button
           className={`fav-btn ${profile.favorite ? 'on' : ''}`}
-          title={profile.favorite ? 'حذف از موردعلاقه‌ها' : 'افزودن به موردعلاقه‌ها'}
+          title={profile.favorite ? 'Remove from favorites' : 'Add to favorites'}
           onClick={(e) => { e.stopPropagation(); onFavorite(profile); }}
         >
           <Icon name="star" size={14} />
@@ -151,12 +151,12 @@ const ResultCard = React.memo(function ResultCard({ index, profile, sub, result,
         <div className="fcard-info">
           <div className="fcard-name">
             {profile.name || profile.address}
-            {recommended && <span className="badge-rec"><Icon name="check" size={10} />پیشنهاد</span>}
-            {isActive && <span className="badge-live">متصل</span>}
+            {recommended && <span className="badge-rec"><Icon name="check" size={10} />Recommended</span>}
+            {isActive && <span className="badge-live">Connected</span>}
           </div>
           <div className="fcard-meta">
             {geo && <span>{geo.label}</span>}
-            <span>{sub ? sub.name : 'دستی'}</span>
+            <span>{sub ? sub.name : 'Manual'}</span>
             <span className="mono proto">{profile.protocol}</span>
           </div>
         </div>
@@ -164,16 +164,16 @@ const ResultCard = React.memo(function ResultCard({ index, profile, sub, result,
         {testing ? (
           <div className="fcard-testing">
             <span className="spin" aria-hidden="true" />
-            <span>{result?.phase ? PHASE_SHORT[result.phase] || 'در حال تست…' : 'در حال تست…'}</span>
+            <span>{result?.phase ? PHASE_SHORT[result.phase] || 'Testing…' : 'Testing…'}</span>
           </div>
         ) : failed ? (
-          <div className="fcard-fail" title={result.error}>ناموفق</div>
+          <div className="fcard-fail" title={result.error}>Failed</div>
         ) : (
           <div className="fcard-metrics mono">
-            <span className={`fm tone-${msTone(m.latency)}`} title="تاخیر">{fmtMs(m.latency)}</span>
-            {m.down != null && <span className="fm tone-good" title="دانلود">↓{mbps(m.down)}</span>}
-            {m.up != null && <span className="fm tone-idle" title="آپلود">↑{mbps(m.up)}</span>}
-            {m.loss != null && m.loss > 0 && <span className="fm tone-bad" title="از‌دست‌رفت">{m.loss}٪</span>}
+            <span className={`fm tone-${msTone(m.latency)}`} title="Latency">{fmtMs(m.latency)}</span>
+            {m.down != null && <span className="fm tone-good" title="Download">↓{mbps(m.down)}</span>}
+            {m.up != null && <span className="fm tone-idle" title="Upload">↑{mbps(m.up)}</span>}
+            {m.loss != null && m.loss > 0 && <span className="fm tone-bad" title="Packet loss">{m.loss}%</span>}
           </div>
         )}
 
@@ -184,30 +184,30 @@ const ResultCard = React.memo(function ResultCard({ index, profile, sub, result,
           onClick={(e) => { e.stopPropagation(); onConnect(profile.id); }}
           disabled={isActive}
         >
-          {isActive ? 'متصل' : 'اتصال'}
+          {isActive ? 'Connected' : 'Connect'}
         </button>
       </div>
 
       {expanded && (
         <div className="fcard-detail" onClick={(e) => e.stopPropagation()}>
           <div className="detail-grid mono">
-            <Metric label="پینگ شبکه" value={fmtMs(result?.ping?.avg)} tone={msTone(result?.ping?.avg)} />
-            <Metric label="پینگ واقعی" value={fmtMs(result?.real?.avg)} tone={msTone(result?.real?.avg)} />
-            <Metric label="کمینه / بیشینه" value={m.latency != null ? `${(result?.real?.min ?? result?.ping?.min) ?? '–'} / ${(result?.real?.max ?? result?.ping?.max) ?? '–'}` : '—'} />
-            <Metric label="جیتر" value={fmtMs(m.jitter)} />
-            <Metric label="از‌دست‌رفت" value={fmtPct(m.loss)} tone={m.loss > 5 ? 'bad' : m.loss > 0 ? 'mid' : 'na'} />
-            <Metric label="برقراری تونل" value={fmtMs(m.boot)} />
-            <Metric label="دست‌دادن TLS" value={fmtMs(result?.real?.handshakeMs)} />
-            <Metric label="دانلود" value={m.down != null ? formatSpeed(m.down) : '—'} tone={m.down ? 'good' : 'na'} />
-            <Metric label="آپلود" value={m.up != null ? formatSpeed(m.up) : '—'} />
-            <Metric label="پایداری" value={fmtPct(m.stability)} tone={m.stability >= 75 ? 'good' : m.stability != null ? 'mid' : 'na'} />
-            <Metric label="حجم مصرفی" value={profile.totalBytes ? formatBytes(profile.totalBytes) : '—'} />
-            <Metric label="آدرس" value={`${profile.address}:${profile.port}`} ltr />
+            <Metric label="Network ping" value={fmtMs(result?.ping?.avg)} tone={msTone(result?.ping?.avg)} />
+            <Metric label="Real ping" value={fmtMs(result?.real?.avg)} tone={msTone(result?.real?.avg)} />
+            <Metric label="Min / Max" value={m.latency != null ? `${(result?.real?.min ?? result?.ping?.min) ?? '–'} / ${(result?.real?.max ?? result?.ping?.max) ?? '–'}` : '—'} />
+            <Metric label="Jitter" value={fmtMs(m.jitter)} />
+            <Metric label="Packet loss" value={fmtPct(m.loss)} tone={m.loss > 5 ? 'bad' : m.loss > 0 ? 'mid' : 'na'} />
+            <Metric label="Tunnel boot" value={fmtMs(m.boot)} />
+            <Metric label="TLS handshake" value={fmtMs(result?.real?.handshakeMs)} />
+            <Metric label="Download" value={m.down != null ? formatSpeed(m.down) : '—'} tone={m.down ? 'good' : 'na'} />
+            <Metric label="Upload" value={m.up != null ? formatSpeed(m.up) : '—'} />
+            <Metric label="Stability" value={fmtPct(m.stability)} tone={m.stability >= 75 ? 'good' : m.stability != null ? 'mid' : 'na'} />
+            <Metric label="Data used" value={profile.totalBytes ? formatBytes(profile.totalBytes) : '—'} />
+            <Metric label="Address" value={`${profile.address}:${profile.port}`} ltr />
           </div>
 
           {(result?.real?.samples?.length > 1 || result?.ping?.samples?.length > 1) && (
             <div className="detail-spark">
-              <span className="detail-spark-label">نمونه‌های تاخیر</span>
+              <span className="detail-spark-label">Latency samples</span>
               <Sparkline values={result?.real?.samples || result?.ping?.samples} tone={msTone(m.latency)} />
             </div>
           )}
@@ -240,13 +240,13 @@ const ResultCard = React.memo(function ResultCard({ index, profile, sub, result,
 });
 
 const PHASE_SHORT = {
-  boot: 'راه‌اندازی تونل…',
-  reach: 'بررسی دسترسی…',
-  handshake: 'دست‌دادن TLS…',
-  probe: 'سنجش تاخیر…',
-  warmup: 'گرم‌کردن تونل…',
-  download: 'سنجش دانلود…',
-  upload: 'سنجش آپلود…',
+  boot: 'Starting tunnel…',
+  reach: 'Checking reachability…',
+  handshake: 'TLS handshake…',
+  probe: 'Measuring latency…',
+  warmup: 'Warming up tunnel…',
+  download: 'Measuring download…',
+  upload: 'Measuring upload…',
 };
 
 function Metric({ label, value, tone = 'na', ltr }) {
@@ -303,7 +303,7 @@ export default function ServerFinder({ profiles, subscriptions, activeProfileId,
     }
     return {
       protocols: [...protocols.entries()].sort((a, b) => b[1] - a[1]),
-      countries: [...countries.values()].sort((a, b) => a.label.localeCompare(b.label, 'fa')),
+      countries: [...countries.values()].sort((a, b) => a.label.localeCompare(b.label)),
       networks: [...networks],
       securities: [...securities],
     };
@@ -345,8 +345,8 @@ export default function ServerFinder({ profiles, subscriptions, activeProfileId,
         default: return 0;
       }
     };
-    if (sortBy === 'name') list = [...list].sort((a, b) => (a.name || '').localeCompare(b.name || '', 'fa'));
-    else if (sortBy === 'country') list = [...list].sort((a, b) => (countryOf(a)?.label || '～').localeCompare(countryOf(b)?.label || '～', 'fa'));
+    if (sortBy === 'name') list = [...list].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+    else if (sortBy === 'country') list = [...list].sort((a, b) => (countryOf(a)?.label || '～').localeCompare(countryOf(b)?.label || '～'));
     else list = [...list].sort((a, b) => val(a) - val(b));
     return list;
   }, [profiles, query, chips, adv, sortBy, priority, t.results, subsById]);
@@ -463,7 +463,7 @@ export default function ServerFinder({ profiles, subscriptions, activeProfileId,
   if (view === 'dash') {
     return (
       <div className="finder-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
-        <div className="finder dash-mode" role="dialog" aria-label="داشبورد تست سرورها">
+        <div className="finder dash-mode" role="dialog" aria-label="Server test dashboard">
           <TestDashboard
             t={t}
             profiles={profiles}
@@ -485,7 +485,7 @@ export default function ServerFinder({ profiles, subscriptions, activeProfileId,
 
   return (
     <div className="finder-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="finder" role="dialog" aria-label="سرور یاب هوشمند">
+      <div className="finder" role="dialog" aria-label="Smart Server Finder">
 
         {/* ---- search head ---- */}
         <div className="finder-head">
@@ -495,19 +495,19 @@ export default function ServerFinder({ profiles, subscriptions, activeProfileId,
               ref={searchRef}
               autoFocus
               value={query}
-              placeholder="جست‌وجوی نام، کشور، شهر، پروتکل، ساب‌اسکریپشن…"
+              placeholder="Search by name, country, city, protocol, subscription…"
               onChange={(e) => setQuery(e.target.value)}
               onFocus={() => setSearchFocused(true)}
               onBlur={() => setTimeout(() => setSearchFocused(false), 150)}
             />
             {query && (
-              <button className="fs-clear" onClick={() => setQuery('')} title="پاک کردن">
+              <button className="fs-clear" onClick={() => setQuery('')} title="Clear">
                 <Icon name="close" size={13} />
               </button>
             )}
             <kbd className="fs-kbd">Esc</kbd>
           </div>
-          <button className="icon-btn ghost finder-close" onClick={onClose} title="بستن (Esc)">
+          <button className="icon-btn ghost finder-close" onClick={onClose} title="Close (Esc)">
             <Icon name="close" size={16} />
           </button>
         </div>
@@ -518,20 +518,20 @@ export default function ServerFinder({ profiles, subscriptions, activeProfileId,
             {recent.map((r) => (
               <button key={r} className="recent-chip" onMouseDown={() => setQuery(r)}>{r}</button>
             ))}
-            <button className="recent-clear" onMouseDown={() => { setRecent([]); saveRecent([]); }}>پاک کردن</button>
+            <button className="recent-clear" onMouseDown={() => { setRecent([]); saveRecent([]); }}>Clear</button>
           </div>
         )}
 
         {/* ---- quick filters ---- */}
         <div className="chip-row">
           <button className={`chip ${!activeChips ? 'on' : ''}`} onClick={() => setChips({ fav: false, tested: false, protocols: [] })}>
-            همه <span className="chip-n mono">{profiles.length}</span>
+            All <span className="chip-n mono">{profiles.length}</span>
           </button>
           <button className={`chip ${chips.fav ? 'on' : ''}`} onClick={() => setChips((c) => ({ ...c, fav: !c.fav }))}>
-            <Icon name="star" size={12} /> موردعلاقه
+            <Icon name="star" size={12} /> Favorites
           </button>
           <button className={`chip ${chips.tested ? 'on' : ''}`} onClick={() => setChips((c) => ({ ...c, tested: !c.tested }))}>
-            <Icon name="check" size={12} /> تست‌شده
+            <Icon name="check" size={12} /> Tested
           </button>
           {facets.protocols.slice(0, 4).map(([proto, n]) => (
             <button
@@ -546,7 +546,7 @@ export default function ServerFinder({ profiles, subscriptions, activeProfileId,
             </button>
           ))}
           <button className={`chip adv-toggle ${advOpen || activeAdv ? 'on' : ''}`} onClick={() => setAdvOpen((v) => !v)}>
-            <Icon name="filter" size={12} /> فیلتر پیشرفته
+            <Icon name="filter" size={12} /> Advanced Filters
             <Icon name="chevron" size={11} className={advOpen ? 'flip' : ''} />
           </button>
         </div>
@@ -555,52 +555,52 @@ export default function ServerFinder({ profiles, subscriptions, activeProfileId,
         {advOpen && (
           <div className="adv-panel">
             <label>
-              <span>ساب‌اسکریپشن</span>
+              <span>Subscription</span>
               <select className="finder-select" value={adv.sub} onChange={(e) => setAdv((a) => ({ ...a, sub: e.target.value }))}>
-                <option value="">همه</option>
+                <option value="">All</option>
                 {subscriptions.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
             </label>
             <label>
-              <span>کشور</span>
+              <span>Country</span>
               <select className="finder-select" value={adv.country} onChange={(e) => setAdv((a) => ({ ...a, country: e.target.value }))}>
-                <option value="">همه</option>
+                <option value="">All</option>
                 {facets.countries.map((c) => <option key={c.iso} value={c.iso}>{c.flag} {c.label}</option>)}
               </select>
             </label>
             {facets.networks.length > 1 && (
               <label>
-                <span>شبکه</span>
+                <span>Network</span>
                 <select className="finder-select" value={adv.network} onChange={(e) => setAdv((a) => ({ ...a, network: e.target.value }))}>
-                  <option value="">همه</option>
+                  <option value="">All</option>
                   {facets.networks.map((n) => <option key={n} value={n}>{n}</option>)}
                 </select>
               </label>
             )}
             {facets.securities.length > 1 && (
               <label>
-                <span>امنیت</span>
+                <span>Security</span>
                 <select className="finder-select" value={adv.security} onChange={(e) => setAdv((a) => ({ ...a, security: e.target.value }))}>
-                  <option value="">همه</option>
+                  <option value="">All</option>
                   {facets.securities.map((s) => <option key={s} value={s}>{s}</option>)}
                 </select>
               </label>
             )}
             <label>
-              <span>مرتب‌سازی</span>
+              <span>Sort by</span>
               <select className="finder-select" value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
                 {SORTS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
               </select>
             </label>
             {activeAdv ? (
-              <button className="btn mini adv-reset" onClick={() => setAdv({ sub: '', country: '', network: '', security: '' })}>حذف فیلترها</button>
+              <button className="btn mini adv-reset" onClick={() => setAdv({ sub: '', country: '', network: '', security: '' })}>Clear Filters</button>
             ) : null}
           </div>
         )}
 
         {/* ---- test controls ---- */}
         <div className="test-bar">
-          <div className="mode-cards" role="radiogroup" aria-label="روش تست">
+          <div className="mode-cards" role="radiogroup" aria-label="Test method">
             {MODES.map((m) => (
               <button
                 key={m.key}
@@ -621,24 +621,24 @@ export default function ServerFinder({ profiles, subscriptions, activeProfileId,
             className="finder-select priority-select"
             value={priority}
             onChange={(e) => setPriority(e.target.value)}
-            title="اولویت پیشنهاد و امتیازدهی"
+            title="Recommendation and scoring priority"
           >
-            {PRIORITIES.map((p) => <option key={p.key} value={p.key}>اولویت: {p.label}</option>)}
+            {PRIORITIES.map((p) => <option key={p.key} value={p.key}>Priority: {p.label}</option>)}
           </select>
 
           {!running ? (
             <button className="btn primary test-start" onClick={startBatch} disabled={!filtered.length}>
               <Icon name="play" size={13} />
-              تست {filtered.length} سرور
+              Test {filtered.length} servers
             </button>
           ) : (
             <div className="test-run-controls">
               {t.status === 'paused' ? (
-                <button className="icon-btn" onClick={engine.resume} title="ادامه"><Icon name="play" size={14} /></button>
+                <button className="icon-btn" onClick={engine.resume} title="Resume"><Icon name="play" size={14} /></button>
               ) : (
-                <button className="icon-btn" onClick={engine.pause} title="توقف موقت"><Icon name="pause" size={14} /></button>
+                <button className="icon-btn" onClick={engine.pause} title="Pause"><Icon name="pause" size={14} /></button>
               )}
-              <button className="icon-btn" onClick={engine.cancelAll} title="لغو"><Icon name="stop" size={13} /></button>
+              <button className="icon-btn" onClick={engine.cancelAll} title="Cancel"><Icon name="stop" size={13} /></button>
             </div>
           )}
         </div>
@@ -648,13 +648,13 @@ export default function ServerFinder({ profiles, subscriptions, activeProfileId,
           <div className="progress-strip">
             <div className="progress-track"><div className="progress-fill" style={{ transform: `scaleX(${progress / 100})` }} /></div>
             <span className="progress-text mono">{t.done}/{t.total}</span>
-            {t.status === 'paused' ? <span className="progress-eta">متوقف</span>
-              : eta != null && <span className="progress-eta">{fmtEta(eta)} مانده</span>}
+            {t.status === 'paused' ? <span className="progress-eta">Paused</span>
+              : eta != null && <span className="progress-eta">{fmtEta(eta)} left</span>}
             <button className="log-toggle dash-jump" onClick={() => setView('dash')}>
-              <Icon name="gauge" size={11} /> داشبورد زنده
+              <Icon name="gauge" size={11} /> Live Dashboard
             </button>
             <button className="log-toggle" onClick={() => setLogOpen((v) => !v)}>
-              گزارش زنده <Icon name="chevron" size={10} className={logOpen ? 'flip' : ''} />
+              Live Log <Icon name="chevron" size={10} className={logOpen ? 'flip' : ''} />
             </button>
           </div>
         )}
@@ -668,16 +668,16 @@ export default function ServerFinder({ profiles, subscriptions, activeProfileId,
             <div className="rec-icon"><Icon name={priorityByKey(priority).icon} size={16} /></div>
             <div className="rec-text">
               <span className="rec-title">
-                پیشنهاد برای «{priorityByKey(priority).label}»: {recommendation.profile.name || recommendation.profile.address}
+                Recommended for “{priorityByKey(priority).label}”: {recommendation.profile.name || recommendation.profile.address}
               </span>
-              <span className="rec-sub">امتیاز سلامت {recommendation.score} از ۱۰۰ · بر پایه‌ی {testedCount} سرور تست‌شده</span>
+              <span className="rec-sub">Health score {recommendation.score}/100 · based on {testedCount} tested servers</span>
             </div>
             <button
               className="btn primary mini"
               disabled={recommendation.profile.id === activeProfileId && connectionState === 'connected'}
               onClick={() => onConnect(recommendation.profile.id)}
             >
-              اتصال
+              Connect
             </button>
           </div>
         )}
@@ -687,19 +687,19 @@ export default function ServerFinder({ profiles, subscriptions, activeProfileId,
           {profiles.length === 0 ? (
             <div className="empty-state">
               <div className="empty-glyph"><Icon name="signal" size={30} strokeWidth={2.25} /></div>
-              <h3>هنوز کانفیگی نداری</h3>
-              <p>اول از پنل اصلی یک کانفیگ یا ساب‌اسکریپشن اضافه کن.</p>
+              <h3>No configs yet</h3>
+              <p>Add a config or subscription from the main panel first.</p>
             </div>
           ) : filtered.length === 0 ? (
             <div className="empty-state">
               <div className="empty-glyph"><Icon name="search" size={28} strokeWidth={2.25} /></div>
-              <h3>چیزی پیدا نشد</h3>
-              <p>عبارت دیگری امتحان کن یا فیلترها را کم کن.</p>
+              <h3>Nothing found</h3>
+              <p>Try a different search term or loosen the filters.</p>
               <button
                 className="btn empty-cta"
                 onClick={() => { setQuery(''); setChips({ fav: false, tested: false, protocols: [] }); setAdv({ sub: '', country: '', network: '', security: '' }); }}
               >
-                پاک کردن همه‌ی فیلترها
+                Clear All Filters
               </button>
             </div>
           ) : (
@@ -736,7 +736,7 @@ export default function ServerFinder({ profiles, subscriptions, activeProfileId,
           <div className="live-log mono" ref={logRef}>
             {t.logs.slice(-60).map((l, i) => (
               <div key={i} className={`log-line tone-${l.tone}`}>
-                <span className="log-t">{new Date(l.t).toLocaleTimeString('fa-IR')}</span>
+                <span className="log-t">{new Date(l.t).toLocaleTimeString('en-US')}</span>
                 {l.msg}
               </div>
             ))}
@@ -749,10 +749,10 @@ export default function ServerFinder({ profiles, subscriptions, activeProfileId,
             <div className="ctx-menu" style={{ left: ctxMenu.x, top: ctxMenu.y }} onClick={(e) => e.stopPropagation()}>
               <div className="ctx-title">{ctxMenu.profile.name || ctxMenu.profile.address}</div>
               <button className="ctx-item" onClick={() => { onConnect(ctxMenu.profile.id); setCtxMenu(null); }}>
-                <Icon name="power" size={13} /> اتصال
+                <Icon name="power" size={13} /> Connect
               </button>
               <button className="ctx-item" onClick={() => { onToggleFavorite(ctxMenu.profile); setCtxMenu(null); }}>
-                <Icon name="star" size={13} /> {ctxMenu.profile.favorite ? 'حذف از موردعلاقه‌ها' : 'افزودن به موردعلاقه‌ها'}
+                <Icon name="star" size={13} /> {ctxMenu.profile.favorite ? 'Remove from favorites' : 'Add to favorites'}
               </button>
               <button
                 className="ctx-item"
@@ -761,7 +761,7 @@ export default function ServerFinder({ profiles, subscriptions, activeProfileId,
                   setCtxMenu(null);
                 }}
               >
-                <Icon name="folder" size={13} /> کپی آدرس
+                <Icon name="folder" size={13} /> Copy Address
               </button>
               <div className="ctx-sep" />
               {MODES.map((mo) => (
@@ -780,12 +780,12 @@ export default function ServerFinder({ profiles, subscriptions, activeProfileId,
 
         {/* ---- footer hints ---- */}
         <div className="finder-foot">
-          <span><kbd>↑↓</kbd> حرکت</span>
-          <span><kbd>Enter</kbd> اتصال</span>
-          <span><kbd>F</kbd> موردعلاقه</span>
-          <span><kbd>/</kbd> جست‌وجو</span>
+          <span><kbd>↑↓</kbd> Navigate</span>
+          <span><kbd>Enter</kbd> Connect</span>
+          <span><kbd>F</kbd> Favorite</span>
+          <span><kbd>/</kbd> Search</span>
           {testedCount > 0 && !running && (
-            <button className="foot-clear" onClick={engine.clearResults}>پاک کردن نتایج</button>
+            <button className="foot-clear" onClick={engine.clearResults}>Clear Results</button>
           )}
         </div>
       </div>

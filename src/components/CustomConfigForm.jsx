@@ -16,7 +16,7 @@ const NETWORKS = [
 ];
 
 const SECURITIES = [
-  { value: 'none', label: 'بدون امنیت' },
+  { value: 'none', label: 'No Security' },
   { value: 'tls', label: 'TLS' },
   { value: 'reality', label: 'Reality' },
 ];
@@ -29,12 +29,12 @@ const SS_METHODS = [
 ];
 
 const TCP_HEADERS = [
-  { value: 'none', label: 'بدون هدر' },
+  { value: 'none', label: 'No Header' },
   { value: 'http', label: 'HTTP Obfuscation' },
 ];
 
 const KCP_HEADERS = [
-  { value: 'none', label: 'بدون هدر' },
+  { value: 'none', label: 'No Header' },
   { value: 'srtp', label: 'srtp' },
   { value: 'utp', label: 'utp' },
   { value: 'wechat-video', label: 'wechat-video' },
@@ -43,7 +43,7 @@ const KCP_HEADERS = [
 ];
 
 const VLESS_FLOWS = [
-  { value: '', label: 'بدون Flow' },
+  { value: '', label: 'No Flow' },
   { value: 'xtls-rprx-vision', label: 'xtls-rprx-vision' },
 ];
 
@@ -111,14 +111,14 @@ export default function CustomConfigForm({ onSubmit, onCancel }) {
   const securityOptions = protocol === 'vmess' ? SECURITIES.filter((s) => s.value !== 'reality') : SECURITIES;
 
   function validateClientSide() {
-    if (!fields.address.trim()) return 'آدرس سرور را وارد کن';
+    if (!fields.address.trim()) return 'Enter the server address';
     const port = Number(fields.port);
-    if (!Number.isInteger(port) || port < 1 || port > 65535) return 'پورت باید بین ۱ تا ۶۵۵۳۵ باشد';
+    if (!Number.isInteger(port) || port < 1 || port > 65535) return 'Port must be between 1 and 65535';
     if (isVmessOrVless) {
       const uuidRe = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
-      if (!uuidRe.test(fields.uuid.trim())) return 'UUID نامعتبر است (فرمت: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)';
+      if (!uuidRe.test(fields.uuid.trim())) return 'Invalid UUID (format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)';
     }
-    if (isTrojanOrSs && !fields.password.trim()) return 'رمز عبور را وارد کن';
+    if (isTrojanOrSs && !fields.password.trim()) return 'Enter a password';
     return '';
   }
 
@@ -130,7 +130,7 @@ export default function CustomConfigForm({ onSubmit, onCancel }) {
     try {
       await onSubmit({ ...fields, port: Number(fields.port) });
     } catch (err) {
-      setError(err.message || 'خطا رخ داد');
+      setError(err.message || 'An error occurred');
     } finally {
       setLoading(false);
     }
@@ -138,18 +138,18 @@ export default function CustomConfigForm({ onSubmit, onCancel }) {
 
   return (
     <div className="custom-config-form">
-      <Group title="نوع کانفیگ">
-        <Field label="پروتکل">
+      <Group title="Config Type">
+        <Field label="Protocol">
           <select className="setting-select" value={protocol} onChange={(e) => set({ protocol: e.target.value, security: e.target.value === 'vmess' && security === 'reality' ? 'tls' : security })}>
             {PROTOCOLS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
           </select>
         </Field>
-        <Field label="نام (اختیاری)">
-          <input className="mono" value={fields.name} placeholder="نام دلخواه برای این سرور" onChange={(e) => set({ name: e.target.value })} />
+        <Field label="Name (optional)">
+          <input className="mono" value={fields.name} placeholder="A custom name for this server" onChange={(e) => set({ name: e.target.value })} />
         </Field>
       </Group>
 
-      <Group title="آدرس سرور">
+      <Group title="Server Address">
         <Field label="Host / IP">
           <input className="mono" value={fields.address} placeholder="example.com" onChange={(e) => set({ address: e.target.value })} />
         </Field>
@@ -158,7 +158,7 @@ export default function CustomConfigForm({ onSubmit, onCancel }) {
         </Field>
       </Group>
 
-      <Group title="احراز هویت">
+      <Group title="Authentication">
         {isVmessOrVless && (
           <Field label="UUID" span>
             <input className="mono" value={fields.uuid} placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" onChange={(e) => set({ uuid: e.target.value })} />
@@ -169,7 +169,7 @@ export default function CustomConfigForm({ onSubmit, onCancel }) {
             <Field label="Alter ID">
               <input className="mono" type="number" min={0} value={fields.alterId} onChange={(e) => set({ alterId: e.target.value })} />
             </Field>
-            <Field label="Security (رمزنگاری)">
+            <Field label="Security (encryption)">
               <select className="setting-select" value={fields.scy} onChange={(e) => set({ scy: e.target.value })}>
                 {['auto', 'aes-128-gcm', 'chacha20-poly1305', 'none'].map((v) => <option key={v} value={v}>{v}</option>)}
               </select>
@@ -189,18 +189,18 @@ export default function CustomConfigForm({ onSubmit, onCancel }) {
           </>
         )}
         {protocol === 'trojan' && (
-          <Field label="رمز عبور" span>
+          <Field label="Password" span>
             <input className="mono" type="text" value={fields.password} onChange={(e) => set({ password: e.target.value })} />
           </Field>
         )}
         {protocol === 'shadowsocks' && (
           <>
-            <Field label="روش رمزنگاری (Method)">
+            <Field label="Encryption Method">
               <select className="setting-select" value={fields.method} onChange={(e) => set({ method: e.target.value })}>
                 {SS_METHODS.map((m) => <option key={m} value={m}>{m}</option>)}
               </select>
             </Field>
-            <Field label="رمز عبور">
+            <Field label="Password">
               <input className="mono" type="text" value={fields.password} onChange={(e) => set({ password: e.target.value })} />
             </Field>
           </>
@@ -208,7 +208,7 @@ export default function CustomConfigForm({ onSubmit, onCancel }) {
       </Group>
 
       {protocol !== 'shadowsocks' && (
-        <Group title="حمل و نقل (Transport)">
+        <Group title="Transport">
           <Field label="Network Type">
             <select className="setting-select" value={network} onChange={(e) => set({ network: e.target.value, headerType: 'none' })}>
               {NETWORKS.map((n) => <option key={n.value} value={n.value}>{n.label}</option>)}
@@ -240,7 +240,7 @@ export default function CustomConfigForm({ onSubmit, onCancel }) {
       )}
 
       {protocol !== 'shadowsocks' && (
-        <Group title="امنیت">
+        <Group title="Security">
           <Field label="Security">
             <select className="setting-select" value={security} onChange={(e) => set({ security: e.target.value })}>
               {securityOptions.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
@@ -262,7 +262,7 @@ export default function CustomConfigForm({ onSubmit, onCancel }) {
               <Field label="Allow Insecure">
                 <label className="custom-checkbox-row">
                   <input type="checkbox" checked={fields.allowInsecure} onChange={(e) => set({ allowInsecure: e.target.checked })} />
-                  <span>گواهی نامعتبر را هم بپذیر</span>
+                  <span>Also accept invalid certificates</span>
                 </label>
               </Field>
             </>
@@ -289,9 +289,9 @@ export default function CustomConfigForm({ onSubmit, onCancel }) {
       {error && <div className="error-msg">{error}</div>}
 
       <div className="row">
-        <button className="btn" onClick={onCancel}>انصراف</button>
+        <button className="btn" onClick={onCancel}>Cancel</button>
         <button className="btn primary" onClick={handleSubmit} disabled={loading}>
-          {loading ? 'در حال افزودن…' : 'افزودن کانفیگ'}
+          {loading ? 'Adding…' : 'Add Config'}
         </button>
       </div>
     </div>

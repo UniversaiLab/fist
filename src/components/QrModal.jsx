@@ -32,7 +32,7 @@ export default function QrModal({ title, subtitle, value, onClose, onToast }) {
       color: { dark: '#0a0d13ff', light: '#ffffffff' },
     })
       .then((url) => { if (!cancelled) setDataUrl(url); })
-      .catch(() => { if (!cancelled) setError('این لینک برای تبدیل به QR خیلی بزرگ است.'); });
+      .catch(() => { if (!cancelled) setError('This link is too large to turn into a QR code.'); });
     return () => { cancelled = true; };
   }, [value, attempt]);
 
@@ -43,9 +43,9 @@ export default function QrModal({ title, subtitle, value, onClose, onToast }) {
     setBusy(true);
     try {
       await window.soul.copyImage(dataUrl);
-      onToast?.('تصویر QR کپی شد');
+      onToast?.('QR image copied');
     } catch {
-      onToast?.('کپی تصویر ناموفق بود', 'error');
+      onToast?.('Failed to copy image', 'error');
     } finally {
       setBusy(false);
     }
@@ -56,9 +56,9 @@ export default function QrModal({ title, subtitle, value, onClose, onToast }) {
     setBusy(true);
     try {
       const res = await window.soul.saveImage(dataUrl, `${slugify(title)}-qrcode.png`);
-      if (!res.canceled) onToast?.('تصویر QR ذخیره شد');
+      if (!res.canceled) onToast?.('QR image saved');
     } catch {
-      onToast?.('ذخیره‌ی تصویر ناموفق بود', 'error');
+      onToast?.('Failed to save image', 'error');
     } finally {
       setBusy(false);
     }
@@ -66,14 +66,14 @@ export default function QrModal({ title, subtitle, value, onClose, onToast }) {
 
   function handleCopyLink() {
     navigator.clipboard?.writeText(value || '')
-      .then(() => onToast?.('لینک کپی شد'))
-      .catch(() => onToast?.('کپی ناموفق بود', 'error'));
+      .then(() => onToast?.('Link copied'))
+      .catch(() => onToast?.('Copy failed', 'error'));
   }
 
   return (
     <div className="overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal qr-modal">
-        <h3>اشتراک‌گذاری با QR</h3>
+        <h3>Share via QR</h3>
         {subtitle && <p className="hint">{subtitle}</p>}
 
         <div className="qr-stage">
@@ -84,7 +84,7 @@ export default function QrModal({ title, subtitle, value, onClose, onToast }) {
               </div>
               <span className="qr-state-msg">{error}</span>
               <button className="btn mini qr-retry" onClick={handleRetry}>
-                <Icon name="refresh" size={12} /> تلاش دوباره
+                <Icon name="refresh" size={12} /> Try Again
               </button>
             </div>
           ) : dataUrl ? (
@@ -94,29 +94,29 @@ export default function QrModal({ title, subtitle, value, onClose, onToast }) {
           ) : (
             <div className="qr-state qr-loading" aria-live="polite">
               <span className="qr-spinner" aria-hidden="true" />
-              <span className="qr-state-msg">در حال تولید QR…</span>
+              <span className="qr-state-msg">Generating QR…</span>
             </div>
           )}
         </div>
 
         <div className="sub-url-row">
           <span className="sub-url mono">{value}</span>
-          <button className="icon-btn" onClick={handleCopyLink} title="کپی لینک">
+          <button className="icon-btn" onClick={handleCopyLink} title="Copy link">
             <Icon name="copy" size={13} />
           </button>
         </div>
 
         <div className="qr-actions">
           <button className="btn" disabled={!dataUrl || busy} onClick={handleCopyImage}>
-            <Icon name="copy" size={13} /> کپی تصویر
+            <Icon name="copy" size={13} /> Copy Image
           </button>
           <button className="btn" disabled={!dataUrl || busy} onClick={handleSaveImage}>
-            <Icon name="download" size={13} /> ذخیره تصویر
+            <Icon name="download" size={13} /> Save Image
           </button>
         </div>
 
         <div className="row">
-          <button className="btn primary" onClick={onClose}>بستن</button>
+          <button className="btn primary" onClick={onClose}>Close</button>
         </div>
       </div>
     </div>

@@ -53,7 +53,7 @@ export function PortField({ label, value, onCommit, disabled }) {
   async function commit() {
     const n = Number(draft);
     if (!Number.isInteger(n) || n < 1024 || n > 65535) {
-      setError('بین ۱۰۲۴ تا ۶۵۵۳۵');
+      setError('Between 1024 and 65535');
       setDraft(String(value));
       return;
     }
@@ -63,7 +63,7 @@ export function PortField({ label, value, onCommit, disabled }) {
       await onCommit(n);
     } catch (err) {
       setDraft(String(value));
-      setError(err.message || 'ذخیره نشد');
+      setError(err.message || 'Failed to save');
     }
   }
 
@@ -107,8 +107,8 @@ export function BypassField({ value, onCommit }) {
   return (
     <div className="setting-row column">
       <div className="setting-text">
-        <span className="setting-label">لیست bypass سفارشی</span>
-        <span className="setting-hint">آدرس‌ها یا الگوهایی که باید همیشه مستقیم (بدون پروکسی) باز شوند؛ با ; یا خط جدید جدا کن. مثال: example.com;10.20.*</span>
+        <span className="setting-label">Custom bypass list</span>
+        <span className="setting-hint">Addresses or patterns that should always open directly (without the proxy); separate with ; or a newline. Example: example.com;10.20.*</span>
       </div>
       <textarea
         className="mono bypass-textarea"
@@ -157,7 +157,7 @@ export function TextField({ label, value, onCommit, disabled, placeholder, hint,
       await onCommit(v);
     } catch (err) {
       setDraft(value || '');
-      setError(err.message || 'ذخیره نشد');
+      setError(err.message || 'Failed to save');
     }
   }
 
@@ -197,7 +197,7 @@ export function PasswordField({ label, value, onCommit, disabled, hint }) {
       await onCommit(draft);
     } catch (err) {
       setDraft(value || '');
-      setError(err.message || 'ذخیره نشد');
+      setError(err.message || 'Failed to save');
     }
   }
 
@@ -223,7 +223,7 @@ export function PasswordField({ label, value, onCommit, disabled, hint }) {
           className="password-toggle"
           tabIndex={-1}
           onClick={() => setVisible((v) => !v)}
-          title={visible ? 'پنهان کردن' : 'نمایش'}
+          title={visible ? 'Hide' : 'Show'}
         >
           <Icon name={visible ? 'eyeOff' : 'eye'} size={13} />
         </button>

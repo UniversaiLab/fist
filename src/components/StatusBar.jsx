@@ -3,10 +3,10 @@ import Icon from './Icon.jsx';
 import { formatBytes, formatSpeed } from '../utils/format.js';
 
 const SHORT_STATUS = {
-  disconnected: 'قطع',
-  connecting: 'در حال اتصال…',
-  connected: 'متصل',
-  disconnecting: 'در حال قطع…',
+  disconnected: 'Disconnected',
+  connecting: 'Connecting…',
+  connected: 'Connected',
+  disconnecting: 'Disconnecting…',
 };
 
 function formatDuration(ms) {
@@ -45,12 +45,12 @@ function StatusBar({ connectionState, activeProfile, connectedAt, latencyMs, sel
     : (typeof selectedPing === 'number' && selectedPing > 0 ? selectedPing : null);
   const pingText = connected && latencyMs == null
     ? '…'
-    : ping == null ? '—' : ping < 0 ? 'بدون پاسخ' : `${ping}ms`;
+    : ping == null ? '—' : ping < 0 ? 'No response' : `${ping}ms`;
 
   return (
     <footer className="status-rail">
       <div className="rail-seg">
-        <span className="rail-label">وضعیت</span>
+        <span className="rail-label">Status</span>
         <span className="rail-value">
           <span className={`status-dot ${connectionState}`} />
           {SHORT_STATUS[connectionState]}
@@ -58,19 +58,19 @@ function StatusBar({ connectionState, activeProfile, connectedAt, latencyMs, sel
       </div>
 
       <div className="rail-seg grow">
-        <span className="rail-label">سرور</span>
+        <span className="rail-label">Server</span>
         <span className="rail-value" title={activeProfile ? `${activeProfile.address}:${activeProfile.port}` : undefined}>
           {activeProfile ? (activeProfile.name || activeProfile.address) : '—'}
         </span>
       </div>
 
       <div className="rail-seg">
-        <span className="rail-label">پینگ</span>
+        <span className="rail-label">Ping</span>
         <span className={`rail-value mono tone-${latencyTone(ping)}`}>{pingText}</span>
       </div>
 
       <div className="rail-seg">
-        <span className="rail-label">سرعت</span>
+        <span className="rail-label">Speed</span>
         <span className="rail-value mono">
           {connected && traffic ? (
             <>
@@ -88,14 +88,14 @@ function StatusBar({ connectionState, activeProfile, connectedAt, latencyMs, sel
       </div>
 
       <div className="rail-seg optional">
-        <span className="rail-label">مصرف نشست</span>
+        <span className="rail-label">Session Usage</span>
         <span className="rail-value mono">
           {connected && traffic ? formatBytes(traffic.sessionTotal) : '—'}
         </span>
       </div>
 
       <div className="rail-seg">
-        <span className="rail-label">مدت اتصال</span>
+        <span className="rail-label">Duration</span>
         <span className="rail-value mono">{duration ?? '—'}</span>
       </div>
 

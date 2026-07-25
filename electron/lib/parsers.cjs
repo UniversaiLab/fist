@@ -416,19 +416,19 @@ function str(v, max = 256) {
 function buildCustomProfile(fields) {
   const f = fields || {};
   const protocol = str(f.protocol);
-  if (!CUSTOM_PROTOCOLS.has(protocol)) throw new Error('پروتکل نامعتبر است');
+  if (!CUSTOM_PROTOCOLS.has(protocol)) throw new Error('Invalid protocol');
 
   const address = str(f.address, 253);
-  if (!address) throw new Error('آدرس سرور را وارد کن');
+  if (!address) throw new Error('Enter the server address');
 
   const port = Number(f.port);
-  if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('پورت باید بین ۱ تا ۶۵۵۳۵ باشد');
+  if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('Port must be between 1 and 65535');
 
   const network = str(f.network) || 'tcp';
-  if (!CUSTOM_NETWORKS.has(network)) throw new Error('نوع شبکه نامعتبر است');
+  if (!CUSTOM_NETWORKS.has(network)) throw new Error('Invalid network type');
 
   let security = str(f.security) || 'none';
-  if (!CUSTOM_SECURITIES.has(security)) throw new Error('نوع امنیت نامعتبر است');
+  if (!CUSTOM_SECURITIES.has(security)) throw new Error('Invalid security type');
   if (protocol === 'vmess' && security === 'reality') security = 'tls'; // vmess has no Reality support
 
   const p = baseProfile(protocol, null);
@@ -452,7 +452,7 @@ function buildCustomProfile(fields) {
 
   if (protocol === 'vmess' || protocol === 'vless') {
     const uuid = str(f.uuid);
-    if (!UUID_RE.test(uuid)) throw new Error('UUID نامعتبر است (فرمت صحیح: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)');
+    if (!UUID_RE.test(uuid)) throw new Error('Invalid UUID (correct format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)');
     p.uuid = uuid;
   }
   if (protocol === 'vmess') {
@@ -466,15 +466,15 @@ function buildCustomProfile(fields) {
   }
   if (protocol === 'trojan') {
     const password = str(f.password, 256);
-    if (!password) throw new Error('رمز عبور را وارد کن');
+    if (!password) throw new Error('Enter a password');
     p.password = password;
     if (!f.security) p.security = 'tls'; // matches parseTrojan's own forced default
   }
   if (protocol === 'shadowsocks') {
     const method = str(f.method);
-    if (!SS_METHODS.has(method)) throw new Error('روش رمزنگاری نامعتبر است');
+    if (!SS_METHODS.has(method)) throw new Error('Invalid encryption method');
     const password = str(f.password, 256);
-    if (!password) throw new Error('رمز عبور را وارد کن');
+    if (!password) throw new Error('Enter a password');
     p.method = method;
     p.password = password;
     p.network = 'tcp';

@@ -85,7 +85,7 @@ function macBypassDomains(bypass) {
 
 async function macEnable(host, port, bypass) {
   const services = await macActiveServices();
-  if (!services.length) throw new Error('هیچ سرویس شبکه‌ی فعالی پیدا نشد');
+  if (!services.length) throw new Error('No active network service found');
   const domains = macBypassDomains(bypass);
   for (const service of services) {
     await run('networksetup', ['-setwebproxy', service, host, String(port)]);
@@ -123,7 +123,7 @@ function linuxBypassList(bypass) {
 
 async function linuxEnable(host, port, bypass) {
   if (!(await gsettingsAvailable())) {
-    throw new Error('پروکسی سیستمی روی این محیط دسکتاپ پشتیبانی نمی‌شود (gsettings پیدا نشد)');
+    throw new Error('System proxy is not supported on this desktop environment (gsettings not found)');
   }
   await run('gsettings', ['set', 'org.gnome.system.proxy', 'mode', 'manual']);
   for (const kind of ['http', 'https']) {

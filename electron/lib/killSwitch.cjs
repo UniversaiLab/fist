@@ -81,7 +81,7 @@ function macRules(remote) {
 
 async function macEnable(remote) {
   if (!remote || !remote.host || !remote.port) {
-    throw new Error('برای فعال‌سازی Kill Switch روی macOS باید سروری متصل باشد');
+    throw new Error('Kill Switch requires an active server connection on macOS');
   }
   const tmpFile = path.join(os.tmpdir(), `soulconnection-killswitch-${Date.now()}.pf`);
   fs.writeFileSync(tmpFile, macRules(remote), 'utf8');
@@ -136,7 +136,7 @@ ${daddrLine}    drop
 
 async function linuxEnable(remote) {
   if (!remote || !remote.host || !remote.port) {
-    throw new Error('برای فعال‌سازی Kill Switch روی لینوکس باید سروری متصل باشد');
+    throw new Error('Kill Switch requires an active server connection on Linux');
   }
   await linuxDisable(); // idempotent: clear any stale table from a previous run first
   const tmpFile = path.join(os.tmpdir(), `soulconnection-killswitch-${Date.now()}.nft`);

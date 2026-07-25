@@ -18,7 +18,7 @@ export default function AddModal({ onClose, onAddLink, onAddSubscription, onAddC
         await onAddSubscription(value.trim());
       }
     } catch (err) {
-      setError(err.message || 'خطا رخ داد');
+      setError(err.message || 'An error occurred');
     } finally {
       setLoading(false);
     }
@@ -27,19 +27,19 @@ export default function AddModal({ onClose, onAddLink, onAddSubscription, onAddC
   return (
     <div className="overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className={`modal ${tab === 'custom' ? 'wide' : ''}`}>
-        <h3>افزودن کانفیگ</h3>
+        <h3>Add Config</h3>
         <p className="hint">
           {tab === 'custom'
-            ? 'تمام تنظیمات کانفیگ را به‌صورت دستی وارد کن.'
-            : 'لینک vmess://, vless://, trojan:// یا ss:// یا یک آدرس ساب‌اسکریپشن وارد کن.'}
+            ? 'Enter all config settings manually.'
+            : 'Enter a vmess://, vless://, trojan://, ss://, hysteria2://, or tg://proxy link, or a subscription address.'}
         </p>
 
         <div className="tabs">
           <button className={`tab ${tab === 'link' ? 'active' : ''}`} onClick={() => setTab('link')}>
-            لینک تکی
+            Single Link
           </button>
           <button className={`tab ${tab === 'sub' ? 'active' : ''}`} onClick={() => setTab('sub')}>
-            ساب‌اسکریپشن
+            Subscription
           </button>
           <button className={`tab ${tab === 'custom' ? 'active' : ''}`} onClick={() => setTab('custom')}>
             Custom
@@ -71,9 +71,9 @@ export default function AddModal({ onClose, onAddLink, onAddSubscription, onAddC
             {error && <div className="error-msg">{error}</div>}
 
             <div className="row">
-              <button className="btn" onClick={onClose}>انصراف</button>
+              <button className="btn" onClick={onClose}>Cancel</button>
               <button className="btn primary" onClick={handleSubmit} disabled={loading || !value.trim()}>
-                {loading ? 'در حال افزودن…' : 'افزودن'}
+                {loading ? 'Adding…' : 'Add'}
               </button>
             </div>
           </>

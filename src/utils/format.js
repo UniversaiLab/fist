@@ -12,15 +12,15 @@ export function formatSpeed(bytesPerSec) {
 }
 
 export function relativeTime(ts) {
-  if (!ts) return 'هرگز';
+  if (!ts) return 'Never';
   const diff = Date.now() - ts;
   const min = Math.floor(diff / 60000);
-  if (min < 1) return 'همین الان';
-  if (min < 60) return `${min} دقیقه پیش`;
+  if (min < 1) return 'Just now';
+  if (min < 60) return `${min}m ago`;
   const hr = Math.floor(min / 60);
-  if (hr < 24) return `${hr} ساعت پیش`;
+  if (hr < 24) return `${hr}h ago`;
   const day = Math.floor(hr / 24);
-  return `${day} روز پیش`;
+  return `${day}d ago`;
 }
 
 export function subUsageInfo(sub) {

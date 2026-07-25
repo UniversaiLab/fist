@@ -35,15 +35,15 @@ export default function SubTestModal({
     const best = recommend(subProfiles, t.results, PRIORITY);
     if (best) {
       onConnect(best.profile.id);
-      onToast?.(`به بهترین سرور «${best.profile.name || best.profile.address}» وصل شد — امتیاز ${best.score}`);
+      onToast?.(`Connected to best server "${best.profile.name || best.profile.address}" — score ${best.score}`);
     } else {
-      onToast?.('هیچ سروری از این ساب‌اسکریپشن در دسترس نبود', 'error');
+      onToast?.('No servers from this subscription were reachable', 'error');
     }
   }, [t.status, t.lastBatch, autoConnectBest, subProfiles, t.results, onConnect, onToast]);
 
   return (
     <div className="finder-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="finder dash-mode" role="dialog" aria-label={`تست سرورهای ${sub.name}`}>
+      <div className="finder dash-mode" role="dialog" aria-label={`Testing servers for ${sub.name}`}>
         <TestDashboard
           t={t}
           profiles={subProfiles}

@@ -102,13 +102,13 @@ function upsert(id, patch) {
 }
 
 const PHASE_LABELS = {
-  boot: 'راه‌اندازی تونل آزمایشی',
-  reach: 'بررسی دسترسی به سرور',
-  handshake: 'دست‌دادن TLS و برقراری پروتکل',
-  probe: 'سنجش تاخیر واقعی',
-  warmup: 'گرم‌کردن تونل',
-  download: 'سنجش سرعت دانلود',
-  upload: 'سنجش سرعت آپلود',
+  boot: 'Starting test tunnel',
+  reach: 'Checking server reachability',
+  handshake: 'TLS handshake and protocol setup',
+  probe: 'Measuring real latency',
+  warmup: 'Warming up tunnel',
+  download: 'Measuring download speed',
+  upload: 'Measuring upload speed',
 };
 
 function ensureEventBridge() {
@@ -159,7 +159,7 @@ async function runOne(profileId, mode) {
   inFlight.set(token, profileId);
   state.currentIds = [...inFlight.values()];
   upsert(profileId, { status: 'testing', phase: null, error: null, liveSamples: [], startedAt: Date.now() });
-  log(`شروع تست ${nameOf(profileId)}`, 'dim');
+  log(`Starting test for ${nameOf(profileId)}`, 'dim');
   emit();
 
   const started = Date.now();
@@ -172,7 +172,7 @@ async function runOne(profileId, mode) {
     upsert(profileId, { ...data, status: 'ok', testedAt: Date.now(), phase: null });
     state.done++;
     const headline = data.ping ? `${data.ping.avg}ms`
-      : data.real ? `${data.real.avg}ms واقعی`
+      : data.real ? `${data.real.avg}ms real`
       : `${((data.speed.downBps * 8) / 1e6).toFixed(1)} Mbps`;
     log(`✓ ${nameOf(profileId)} — ${headline}`, 'good');
   } catch (err) {
@@ -182,13 +182,13 @@ async function runOne(profileId, mode) {
       upsert(profileId, { status: 'skipped', error: null, phase: null });
       state.done++;
       state.skipped++;
-      log(`⤼ ${nameOf(profileId)} — رد شد`, 'dim');
+      log(`⤼ ${nameOf(profileId)} — skipped`, 'dim');
     } else {
-      upsert(profileId, { status: cancelled ? 'idle' : 'fail', error: cancelled ? null : (err?.message || 'خطای ناشناخته'), phase: null });
+      upsert(profileId, { status: cancelled ? 'idle' : 'fail', error: cancelled ? null : (err?.message || 'Unknown error'), phase: null });
       if (!cancelled) {
         state.done++;
         state.failed++;
-        log(`✗ ${nameOf(profileId)} — ${err?.message || 'ناموفق'}`, 'bad');
+        log(`✗ ${nameOf(profileId)} — ${err?.message || 'Failed'}`, 'bad');
       }
     }
   } finally {
@@ -227,7 +227,7 @@ export async function startBatch(profileIds, mode) {
   state.lastBatch = null;
   queue = [...profileIds];
   for (const id of profileIds) upsert(id, { status: 'queued', error: null });
-  log(`تست ${mode === 'ping' ? 'پینگ شبکه' : mode === 'real' ? 'پینگ واقعی' : 'سرعت'} برای ${profileIds.length} سرور شروع شد`, 'info');
+  log(`${mode === 'ping' ? 'Network ping' : mode === 'real' ? 'Real ping' : 'Speed'} test started for ${profileIds.length} servers`, 'info');
   emit();
 
   const n = Math.min(CONCURRENCY[mode] || 1, profileIds.length);
@@ -251,7 +251,7 @@ export async function startBatch(profileIds, mode) {
     cancelled: wasStopped,
     finishedAt: Date.now(),
   };
-  log(wasStopped ? 'تست لغو شد' : `تست تمام شد — ${state.lastBatch.ok} موفق، ${state.failed} ناموفق${state.skipped ? `، ${state.skipped} ردشده` : ''}`, wasStopped ? 'bad' : 'good');
+  log(wasStopped ? 'Test cancelled' : `Test finished — ${state.lastBatch.ok} succeeded, ${state.failed} failed${state.skipped ? `, ${state.skipped} skipped` : ''}`, wasStopped ? 'bad' : 'good');
   persistResults();
   emit();
 }
@@ -266,7 +266,7 @@ export function skipOne(profileId) {
 export function pause() {
   if (state.status !== 'running') return;
   state.status = 'paused';
-  log('تست موقتا متوقف شد — تست‌های در جریان کامل می‌شوند', 'info');
+  log('Test paused — in-flight tests will finish', 'info');
   emit();
 }
 
@@ -276,7 +276,7 @@ export function resume() {
   const waiters = resumeWaiters;
   resumeWaiters = [];
   waiters.forEach((fn) => fn());
-  log('ادامه‌ی تست…', 'info');
+  log('Resuming test…', 'info');
   emit();
 }
 
@@ -309,6 +309,6 @@ export function clearResults() {
     delete state.results[id];
   }
   try { localStorage.removeItem(RESULTS_KEY); } catch { /* ignore */ }
-  log('نتایج پاک شد', 'info');
+  log('Results cleared', 'info');
   emit();
 }

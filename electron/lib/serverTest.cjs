@@ -1,5 +1,5 @@
 'use strict';
-// Server evaluation engine behind the "سرور یاب" (Server Finder):
+// Server evaluation engine behind the Server Finder:
 //   Mode 1  pingStats  — ICMP (best effort) + TCP latency samples → avg/min/max/jitter/loss
 //   Mode 2  realPing   — boots a throwaway sing-box instance for the profile and measures
 //                        the latency actually experienced through the tunnel
@@ -171,7 +171,7 @@ async function pingStats(profile, opts = {}) {
   throwIfAborted(opts.signal);
   const best = icmp && icmp.avg != null ? icmp : tcp;
   if (best.avg == null) {
-    const err = new Error('سرور به هیچ‌کدام از تست‌های پینگ پاسخ نداد');
+    const err = new Error('The server did not respond to any ping test');
     err.code = 'UNREACHABLE';
     throw err;
   }
@@ -261,7 +261,7 @@ async function realPing(profile, { singboxBin, workRoot, signal, emit = () => {}
     const firstMs = await probeViaProxy(tunnel.httpPort, 15000, signal);
     throwIfAborted(signal);
     if (firstMs < 0) {
-      const err = new Error('تونل برقرار شد ولی هیچ ترافیکی از آن عبور نکرد');
+      const err = new Error('Tunnel established but no traffic passed through it');
       err.code = 'TUNNEL_DEAD';
       throw err;
     }
@@ -278,7 +278,7 @@ async function realPing(profile, { singboxBin, workRoot, signal, emit = () => {}
     }
     const ok = samples.filter((s) => s > 0);
     if (!ok.length) {
-      const err = new Error('درخواست‌های عبوری از تونل پاسخی نگرفتند');
+      const err = new Error('Requests through the tunnel got no response');
       err.code = 'TUNNEL_DEAD';
       throw err;
     }
@@ -320,7 +320,7 @@ function openTlsViaProxy(httpPort, host, port, timeoutMs, signal) {
       if (idx === -1) return;
       socket.removeListener('data', onData);
       if (!/^HTTP\/1\.[01] 200/.test(head)) {
-        return fail(new Error('پروکسی محلی درخواست CONNECT را نپذیرفت'));
+        return fail(new Error('The local proxy rejected the CONNECT request'));
       }
       const tlsSocket = tls.connect({ socket, servername: host }, () => {
         if (settled) return;
@@ -364,7 +364,7 @@ async function measureDownload(httpPort, { durationMs, signal, emit }) {
       if (signal) signal.removeEventListener('abort', onAbort);
       sock.destroy();
       const elapsed = start ? (Date.now() - start) / 1000 : 0;
-      if (!total || elapsed < 0.4) return reject(new Error('دانلود تست ناموفق بود'));
+      if (!total || elapsed < 0.4) return reject(new Error('Download test failed'));
       resolve({ bps: total / elapsed, bytes: total, seconds: elapsed, samples });
     };
     const fail = (err) => {
@@ -442,7 +442,7 @@ async function measureUpload(httpPort, { bytes, signal, emit }) {
       emit('speed', { dir: 'up', bps, bytes: written, elapsed: now - start });
       windowBytes = 0;
       lastTick = now;
-      if (now - start > 30000) fail(new Error('آپلود تست بیش از حد طول کشید'));
+      if (now - start > 30000) fail(new Error('Upload test took too long'));
     }, 250);
 
     sock.on('data', () => {
@@ -485,7 +485,7 @@ async function speedTest(profile, { singboxBin, workRoot, signal, emit = () => {
       if (ms > 0) warm.push(ms);
     }
     if (!warm.length) {
-      const err = new Error('تونل برقرار شد ولی ترافیک از آن عبور نکرد');
+      const err = new Error('Tunnel established but traffic did not pass through it');
       err.code = 'TUNNEL_DEAD';
       throw err;
     }

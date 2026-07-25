@@ -35,13 +35,13 @@ export const normalizers = {
 };
 
 export const PRIORITIES = [
-  { key: 'balanced', label: 'متعادل', icon: 'sliders', weights: { latency: 0.25, down: 0.25, stability: 0.15, loss: 0.15, jitter: 0.1, up: 0.1 } },
-  { key: 'latency', label: 'کمترین تاخیر', icon: 'bolt', weights: { latency: 0.6, jitter: 0.25, loss: 0.15 } },
-  { key: 'speed', label: 'بیشترین سرعت', icon: 'gauge', weights: { down: 0.55, up: 0.2, latency: 0.15, stability: 0.1 } },
-  { key: 'gaming', label: 'گیمینگ', icon: 'target', weights: { latency: 0.35, jitter: 0.3, loss: 0.25, stability: 0.1 } },
-  { key: 'streaming', label: 'استریم', icon: 'play', weights: { down: 0.45, stability: 0.25, latency: 0.15, loss: 0.15 } },
-  { key: 'browsing', label: 'وب‌گردی', icon: 'globe', weights: { latency: 0.35, first: 0.3, down: 0.2, loss: 0.15 } },
-  { key: 'stable', label: 'پایداری', icon: 'shield', weights: { stability: 0.35, loss: 0.3, jitter: 0.2, latency: 0.15 } },
+  { key: 'balanced', label: 'Balanced', icon: 'sliders', weights: { latency: 0.25, down: 0.25, stability: 0.15, loss: 0.15, jitter: 0.1, up: 0.1 } },
+  { key: 'latency', label: 'Lowest Latency', icon: 'bolt', weights: { latency: 0.6, jitter: 0.25, loss: 0.15 } },
+  { key: 'speed', label: 'Highest Speed', icon: 'gauge', weights: { down: 0.55, up: 0.2, latency: 0.15, stability: 0.1 } },
+  { key: 'gaming', label: 'Gaming', icon: 'target', weights: { latency: 0.35, jitter: 0.3, loss: 0.25, stability: 0.1 } },
+  { key: 'streaming', label: 'Streaming', icon: 'play', weights: { down: 0.45, stability: 0.25, latency: 0.15, loss: 0.15 } },
+  { key: 'browsing', label: 'Browsing', icon: 'globe', weights: { latency: 0.35, first: 0.3, down: 0.2, loss: 0.15 } },
+  { key: 'stable', label: 'Stability', icon: 'shield', weights: { stability: 0.35, loss: 0.3, jitter: 0.2, latency: 0.15 } },
 ];
 
 export function priorityByKey(key) {
@@ -98,21 +98,21 @@ export function qualityEstimates(result) {
   const down = mbps(m.down);
   const out = [];
   if (down != null) {
-    const label = down >= 25 ? '4K' : down >= 8 ? 'Full HD' : down >= 3 ? 'HD' : down >= 1 ? 'SD' : 'ضعیف';
-    out.push({ key: 'streaming', title: 'استریم', label, tone: down >= 8 ? 'good' : down >= 1 ? 'mid' : 'bad' });
+    const label = down >= 25 ? '4K' : down >= 8 ? 'Full HD' : down >= 3 ? 'HD' : down >= 1 ? 'SD' : 'Poor';
+    out.push({ key: 'streaming', title: 'Streaming', label, tone: down >= 8 ? 'good' : down >= 1 ? 'mid' : 'bad' });
   }
   if (m.latency != null) {
     const great = m.latency < 90 && (m.jitter ?? 0) < 25 && (m.loss ?? 0) < 2;
     const good = m.latency < 170 && (m.jitter ?? 0) < 50 && (m.loss ?? 0) < 5;
     const okay = m.latency < 280;
-    const label = great ? 'عالی' : good ? 'خوب' : okay ? 'قابل قبول' : 'ضعیف';
-    out.push({ key: 'gaming', title: 'گیمینگ', label, tone: great || good ? 'good' : okay ? 'mid' : 'bad' });
+    const label = great ? 'Excellent' : good ? 'Good' : okay ? 'Acceptable' : 'Poor';
+    out.push({ key: 'gaming', title: 'Gaming', label, tone: great || good ? 'good' : okay ? 'mid' : 'bad' });
   }
   if (m.latency != null || down != null) {
     const fast = (m.first == null || m.first < 900) && (m.latency ?? 999) < 200 && (down == null || down > 2);
     const okay = (m.latency ?? 999) < 400;
-    const label = fast ? 'روان' : okay ? 'معمولی' : 'کند';
-    out.push({ key: 'browsing', title: 'وب‌گردی', label, tone: fast ? 'good' : okay ? 'mid' : 'bad' });
+    const label = fast ? 'Smooth' : okay ? 'Average' : 'Slow';
+    out.push({ key: 'browsing', title: 'Browsing', label, tone: fast ? 'good' : okay ? 'mid' : 'bad' });
   }
   return out;
 }
