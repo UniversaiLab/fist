@@ -3,7 +3,7 @@ const path = require('path');
 const grpc = require('@grpc/grpc-js');
 const protoLoader = require('@grpc/proto-loader');
 
-const PROTO_PATH = path.join(__dirname, 'proto', 'stats.proto');
+const PROTO_PATH = path.join(__dirname, 'proto', 'v2ray-stats.proto');
 let statsProto = null;
 
 function loadProto() {
@@ -15,7 +15,9 @@ function loadProto() {
     defaults: true,
     oneofs: true,
   });
-  statsProto = grpc.loadPackageDefinition(def).xray.app.stats.command;
+  // sing-box's experimental.v2ray_api exposes this under the real v2ray-core
+  // service name for interop -- see electron/lib/proto/v2ray-stats.proto.
+  statsProto = grpc.loadPackageDefinition(def).v2ray.core.app.stats.command;
   return statsProto;
 }
 
@@ -36,7 +38,7 @@ class StatsClient {
     return new Promise((resolve, reject) => {
       const deadline = new Date(Date.now() + timeoutMs);
       this.client.QueryStats(
-        { pattern: `outbound>>>${tag}>>>traffic>>>`, reset: false },
+        { patterns: [`outbound>>>${tag}>>>traffic>>>`], reset: false },
         { deadline },
         (err, res) => {
           if (err) return reject(err);

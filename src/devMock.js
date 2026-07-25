@@ -12,7 +12,7 @@ let profiles = [
   { id: 'p3', name: 'Helsinki — Reality', address: 'fi1.soulnet.dev', port: 443, protocol: 'vless', network: 'tcp', security: 'reality', subId: 's1', totalBytes: 0, link: 'vless://uuid-p3@fi1.soulnet.dev:443?type=tcp&security=reality#Helsinki-Reality' },
   { id: 'p4', name: '🇵🇱 Warsaw — Trojan', address: 'pl3.soulnet.dev', port: 2053, protocol: 'trojan', network: 'grpc', security: 'tls', subId: 's2', totalBytes: 6.4e8, link: 'trojan://pass-p4@pl3.soulnet.dev:2053?type=grpc&security=tls#Warsaw-Trojan' },
   { id: 'p5', name: 'Istanbul — Direct', address: 'tr1.soulnet.dev', port: 443, protocol: 'shadowsocks', network: 'tcp', security: 'none', subId: 's2', totalBytes: 0, link: 'ss://YWVzLTI1Ni1nY206cGFzcw==@tr1.soulnet.dev:443#Istanbul-Direct' },
-  { id: 'p6', name: 'خانگی — سرور شخصی', address: '91.108.4.12', port: 8080, protocol: 'vless', network: 'ws', security: 'tls', subId: null, totalBytes: 2.3e10, favorite: true, link: 'vless://uuid-p6@91.108.4.12:8080?type=ws&security=tls#خانگی' },
+  { id: 'p6', name: 'Home — Personal Server', address: '91.108.4.12', port: 8080, protocol: 'vless', network: 'ws', security: 'tls', subId: null, totalBytes: 2.3e10, favorite: true, link: 'vless://uuid-p6@91.108.4.12:8080?type=ws&security=tls#Home' },
   { id: 'p7', name: 'US Dallas — Reality', address: 'us4.soulnet.dev', port: 443, protocol: 'vless', network: 'tcp', security: 'reality', subId: 's1', totalBytes: 0, link: 'vless://uuid-p7@us4.soulnet.dev:443?type=tcp&security=reality#US-Dallas-Reality' },
   { id: 'p8', name: 'Amsterdam — WS CDN', address: 'nl1.soulnet.dev', port: 2087, protocol: 'vmess', network: 'ws', security: 'tls', subId: 's1', totalBytes: 3.1e8, link: 'vmess://eyJhZGQiOiJubDEuc291bG5ldC5kZXYiLCJwb3J0IjoyMDg3fQ==' },
   { id: 'p9', name: 'Singapore — Edge', address: 'sg2.soulnet.dev', port: 443, protocol: 'trojan', network: 'ws', security: 'tls', subId: 's2', totalBytes: 0, link: 'trojan://pass-p9@sg2.soulnet.dev:443?type=ws&security=tls#Singapore-Edge' },
@@ -20,7 +20,7 @@ let profiles = [
 
 const subscriptions = [
   { id: 's1', name: 'SoulNet Premium', lastUpdated: Date.now() - 42 * 60000, url: 'https://sub.soulnet.dev/premium/abc123', configCount: 5 },
-  { id: 's2', name: 'بکاپ رایگان', lastUpdated: Date.now() - 26 * 3600000, url: 'https://sub.soulnet.dev/free/xyz789', configCount: 3 },
+  { id: 's2', name: 'Free Backup', lastUpdated: Date.now() - 26 * 3600000, url: 'https://sub.soulnet.dev/free/xyz789', configCount: 3 },
 ];
 
 const DEFAULT_SETTINGS = {
@@ -32,7 +32,7 @@ const DEFAULT_SETTINGS = {
   autoReconnect: true,
   killSwitchEnabled: false,
   subAutoUpdateInterval: 0,
-  xrayLogLevel: 'warning',
+  singboxLogLevel: 'warn',
   socksPort: 10808,
   httpPort: 10809,
   socksHost: '127.0.0.1',
@@ -127,7 +127,7 @@ export function installDevMock() {
       settings,
       systemProxyEnabled,
     }),
-    getAppInfo: async () => ({ version: '2.0.0-dev', xrayVersion: '25.1.30' }),
+    getAppInfo: async () => ({ version: '2.0.0-dev', singboxVersion: '1.13.14' }),
     connect: async (id) => {
       state = { ...state, activeProfileId: id, connectionState: 'connecting' };
       emitState();
@@ -161,18 +161,18 @@ export function installDevMock() {
       if (Math.random() < 0.15) throw new Error('timeout');
       return { ms: 40 + Math.round(Math.random() * 500) };
     },
-    addLink: async () => { throw new Error('در حالت پیش‌نمایش در دسترس نیست'); },
-    addSubscription: async () => { throw new Error('در حالت پیش‌نمایش در دسترس نیست'); },
+    addLink: async () => { throw new Error('Not available in preview mode'); },
+    addSubscription: async () => { throw new Error('Not available in preview mode'); },
     addCustomConfig: async (fields) => {
       await new Promise((r) => setTimeout(r, 300));
-      if (!fields.address?.trim()) throw new Error('آدرس سرور را وارد کن');
+      if (!fields.address?.trim()) throw new Error('Enter the server address');
       const port = Number(fields.port);
-      if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('پورت باید بین ۱ تا ۶۵۵۳۵ باشد');
+      if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('Port must be between 1 and 65535');
       if ((fields.protocol === 'vmess' || fields.protocol === 'vless') && !/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(fields.uuid || '')) {
-        throw new Error('UUID نامعتبر است (فرمت: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)');
+        throw new Error('Invalid UUID (format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)');
       }
       if ((fields.protocol === 'trojan' || fields.protocol === 'shadowsocks') && !fields.password?.trim()) {
-        throw new Error('رمز عبور را وارد کن');
+        throw new Error('Enter a password');
       }
       const profile = {
         id: `custom-${Date.now()}`,
@@ -199,7 +199,7 @@ export function installDevMock() {
       if (p) p.name = name;
       return [...profiles];
     },
-    updateProfile: async () => { throw new Error('در حالت پیش‌نمایش در دسترس نیست'); },
+    updateProfile: async () => { throw new Error('Not available in preview mode'); },
     updateSubscription: async (id, patch) => {
       const s = subscriptions.find((x) => x.id === id);
       if (s) Object.assign(s, patch);
@@ -231,7 +231,7 @@ export function installDevMock() {
     openProxyFolder: () => {},
 
     systemProxyEnable: async () => {
-      if (state.connectionState !== 'connected') throw new Error('اول باید پروکسی محلی را روشن کنی (به یک سرور وصل شو)');
+      if (state.connectionState !== 'connected') throw new Error('Turn on the local proxy first (connect to a server)');
       await new Promise((r) => setTimeout(r, 250));
       systemProxyEnabled = true;
       emitState();
@@ -244,10 +244,10 @@ export function installDevMock() {
       return true;
     },
     testProxyConnection: async (protocol) => {
-      if (state.connectionState !== 'connected') return { ok: false, reason: 'not-running', message: 'پروکسی محلی در حال اجرا نیست' };
+      if (state.connectionState !== 'connected') return { ok: false, reason: 'not-running', message: 'The local proxy is not running' };
       await new Promise((r) => setTimeout(r, 600 + Math.random() * 600));
       const user = protocol === 'socks' ? settings.socksUsername : settings.httpUsername;
-      if (user && Math.random() < 0.2) return { ok: false, reason: 'auth-failed', message: 'نام کاربری یا رمز عبور اشتباه است' };
+      if (user && Math.random() < 0.2) return { ok: false, reason: 'auth-failed', message: 'Incorrect username or password' };
       return { ok: true, ms: 20 + Math.round(Math.random() * 60) };
     },
     resetNetworkDefaults: async () => {
@@ -285,7 +285,7 @@ export function installDevMock() {
         emitTest({ token, type: 'sample', index: i, ms });
       }
       const ok = samples.filter((s) => s > 0);
-      if (!ok.length) throw new Error('سرور به هیچ‌کدام از تست‌های پینگ پاسخ نداد');
+      if (!ok.length) throw new Error('The server did not respond to any ping test');
       const avg = Math.round(ok.reduce((a, b) => a + b, 0) / ok.length);
       return {
         method: 'tcp', samples, avg, min: Math.min(...ok), max: Math.max(...ok),
@@ -299,7 +299,7 @@ export function installDevMock() {
         await new Promise((r) => setTimeout(r, rnd(250, phase === 'boot' ? 900 : 500)));
         checkCancel(token);
       }
-      if (n.dead) throw new Error('تونل برقرار شد ولی هیچ ترافیکی از آن عبور نکرد');
+      if (n.dead) throw new Error('Tunnel established but no traffic passed through it');
       const samples = [];
       for (let i = 0; i < 5; i++) {
         await new Promise((r) => setTimeout(r, rnd(120, 300)));
@@ -321,7 +321,7 @@ export function installDevMock() {
       emitTest({ token, type: 'phase', phase: 'boot' });
       await new Promise((r) => setTimeout(r, rnd(400, 1000)));
       checkCancel(token);
-      if (n.dead) throw new Error('تونل برقرار شد ولی ترافیک از آن عبور نکرد');
+      if (n.dead) throw new Error('Tunnel established but traffic did not pass through it');
       emitTest({ token, type: 'phase', phase: 'warmup' });
       await new Promise((r) => setTimeout(r, 500));
 

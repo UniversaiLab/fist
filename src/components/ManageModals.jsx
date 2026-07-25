@@ -24,7 +24,7 @@ export function RenameModal({ title, initialValue, onSubmit, onClose }) {
       await onSubmit(value.trim());
       onClose();
     } catch (err) {
-      setError(err.message || 'خطا رخ داد');
+      setError(err.message || 'An error occurred');
     } finally {
       setLoading(false);
     }
@@ -42,9 +42,9 @@ export function RenameModal({ title, initialValue, onSubmit, onClose }) {
         />
         {error && <div className="error-msg">{error}</div>}
         <div className="row">
-          <button className="btn" onClick={onClose}>انصراف</button>
+          <button className="btn" onClick={onClose}>Cancel</button>
           <button className="btn primary" onClick={handleSubmit} disabled={loading || !value.trim()}>
-            {loading ? 'در حال ذخیره…' : 'ذخیره'}
+            {loading ? 'Saving…' : 'Save'}
           </button>
         </div>
       </div>
@@ -65,7 +65,7 @@ export function EditProfileModal({ profile, onSubmit, onClose }) {
       await onSubmit(value.trim());
       onClose();
     } catch (err) {
-      setError(err.message || 'خطا رخ داد');
+      setError(err.message || 'An error occurred');
     } finally {
       setLoading(false);
     }
@@ -74,14 +74,14 @@ export function EditProfileModal({ profile, onSubmit, onClose }) {
   return (
     <div className="overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal">
-        <h3>ویرایش کانفیگ</h3>
-        <p className="hint">لینک کانفیگ را ویرایش کن و ذخیره کن.</p>
+        <h3>Edit Config</h3>
+        <p className="hint">Edit the config link and save.</p>
         <textarea className="mono" value={value} onChange={(e) => setValue(e.target.value)} autoFocus />
         {error && <div className="error-msg">{error}</div>}
         <div className="row">
-          <button className="btn" onClick={onClose}>انصراف</button>
+          <button className="btn" onClick={onClose}>Cancel</button>
           <button className="btn primary" onClick={handleSubmit} disabled={loading || !value.trim()}>
-            {loading ? 'در حال ذخیره…' : 'ذخیره'}
+            {loading ? 'Saving…' : 'Save'}
           </button>
         </div>
       </div>
@@ -103,7 +103,7 @@ export function EditSubscriptionModal({ sub, onSubmit, onClose }) {
       await onSubmit({ name: name.trim(), url: url.trim() });
       onClose();
     } catch (err) {
-      setError(err.message || 'خطا رخ داد');
+      setError(err.message || 'An error occurred');
     } finally {
       setLoading(false);
     }
@@ -112,20 +112,20 @@ export function EditSubscriptionModal({ sub, onSubmit, onClose }) {
   return (
     <div className="overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal">
-        <h3>ویرایش ساب‌اسکریپشن</h3>
+        <h3>Edit Subscription</h3>
         <div className="field">
-          <label className="field-label">نام</label>
+          <label className="field-label">Name</label>
           <input value={name} onChange={(e) => setName(e.target.value)} autoFocus />
         </div>
         <div className="field">
-          <label className="field-label">آدرس</label>
+          <label className="field-label">Address</label>
           <input className="mono" value={url} onChange={(e) => setUrl(e.target.value)} />
         </div>
         {error && <div className="error-msg">{error}</div>}
         <div className="row">
-          <button className="btn" onClick={onClose}>انصراف</button>
+          <button className="btn" onClick={onClose}>Cancel</button>
           <button className="btn primary" onClick={handleSubmit} disabled={loading || !name.trim() || !url.trim()}>
-            {loading ? 'در حال ذخیره…' : 'ذخیره'}
+            {loading ? 'Saving…' : 'Save'}
           </button>
         </div>
       </div>
@@ -133,7 +133,7 @@ export function EditSubscriptionModal({ sub, onSubmit, onClose }) {
   );
 }
 
-export function ConfirmModal({ title, message, confirmLabel = 'حذف همیشگی', cancelLabel = 'انصراف', onConfirm, onClose }) {
+export function ConfirmModal({ title, message, confirmLabel = 'Delete Permanently', cancelLabel = 'Cancel', onConfirm, onClose }) {
   return (
     <div className="overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal confirm-modal">
@@ -156,39 +156,39 @@ export function SubscriptionDetailsModal({ sub, onClose }) {
   return (
     <div className="overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal">
-        <h3>جزئیات ساب‌اسکریپشن</h3>
+        <h3>Subscription Details</h3>
         <div className="sub-url-row">
           <span className="sub-url mono">{sub.url}</span>
           <button
             className="icon-btn"
             onClick={() => navigator.clipboard?.writeText(sub.url).catch(() => {})}
-            title="کپی آدرس"
+            title="Copy address"
           >
             <Icon name="copy" size={13} />
           </button>
         </div>
         <div className="detail-grid compact">
-          <Detail label="نام" value={sub.name || '—'} />
-          <Detail label="تعداد کانفیگ" value={String(sub.configCount ?? 0)} />
-          <Detail label="ایجاد شده" value={sub.createdAt ? new Date(sub.createdAt).toLocaleDateString('fa-IR') : '—'} />
-          <Detail label="آخرین به‌روزرسانی" value={relativeTime(sub.lastUpdated)} />
+          <Detail label="Name" value={sub.name || '—'} />
+          <Detail label="Config count" value={String(sub.configCount ?? 0)} />
+          <Detail label="Created" value={sub.createdAt ? new Date(sub.createdAt).toLocaleDateString('en-US') : '—'} />
+          <Detail label="Last updated" value={relativeTime(sub.lastUpdated)} />
           {usageInfo && (
             <>
               <Detail
-                label="حجم مصرفی"
+                label="Data used"
                 value={usageInfo.total > 0 ? `${formatBytes(usageInfo.used)} / ${formatBytes(usageInfo.total)}` : formatBytes(usageInfo.used)}
                 ltr
               />
               <Detail
-                label="انقضا"
-                value={usageInfo.daysLeft !== null ? (usageInfo.expired ? 'منقضی شده' : `${usageInfo.daysLeft} روز مانده`) : '—'}
+                label="Expiry"
+                value={usageInfo.daysLeft !== null ? (usageInfo.expired ? 'Expired' : `${usageInfo.daysLeft} days left`) : '—'}
                 tone={usageInfo.expired ? 'bad' : 'na'}
               />
             </>
           )}
         </div>
         <div className="row">
-          <button className="btn primary" onClick={onClose}>بستن</button>
+          <button className="btn primary" onClick={onClose}>Close</button>
         </div>
       </div>
     </div>

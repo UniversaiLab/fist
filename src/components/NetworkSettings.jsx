@@ -10,24 +10,24 @@ const PROTO_DEFAULTS = {
 
 const PROTO_LABEL = { socks: 'SOCKS5', http: 'HTTP' };
 
-const hostValidate = (v) => (isValidHost(v) ? null : 'آدرس IP یا دامنه معتبر نیست');
+const hostValidate = (v) => (isValidHost(v) ? null : 'Not a valid IP address or domain');
 
 function TestResult({ state }) {
   if (!state || state.status === 'idle') return null;
   if (state.status === 'testing') {
-    return <span className="net-test-result testing"><span className="spin" aria-hidden="true" /> در حال تست…</span>;
+    return <span className="net-test-result testing"><span className="spin" aria-hidden="true" /> Testing…</span>;
   }
   if (state.status === 'ok') {
-    return <span className="net-test-result ok"><Icon name="check" size={12} /> متصل{state.ms != null ? ` — ${state.ms}ms` : ''}</span>;
+    return <span className="net-test-result ok"><Icon name="check" size={12} /> Connected{state.ms != null ? ` — ${state.ms}ms` : ''}</span>;
   }
-  return <span className="net-test-result fail"><Icon name="info" size={12} /> {state.message || 'ناموفق'}</span>;
+  return <span className="net-test-result fail"><Icon name="info" size={12} /> {state.message || 'Failed'}</span>;
 }
 
 function ProxyLogFeed({ logs }) {
   const ref = useRef(null);
   useEffect(() => { if (ref.current) ref.current.scrollTop = ref.current.scrollHeight; }, [logs.length]);
   if (!logs.length) {
-    return <div className="net-log-empty">هنوز رویدادی ثبت نشده — پس از اتصال به یک سرور، لاگ‌های زنده‌ی پروکسی اینجا نمایش داده می‌شوند.</div>;
+    return <div className="net-log-empty">No events logged yet — once you connect to a server, live proxy logs will show up here.</div>;
   }
   return (
     <div className="feed net-log-feed" ref={ref}>
@@ -35,7 +35,7 @@ function ProxyLogFeed({ logs }) {
         <div key={`${l.t}-${i}`} className="feed-line">
           <span className="feed-dot" aria-hidden="true" />
           <span className="feed-msg mono">{l.text}</span>
-          <span className="feed-t mono">{new Date(l.t).toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
+          <span className="feed-t mono">{new Date(l.t).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
         </div>
       ))}
     </div>
@@ -102,13 +102,13 @@ export default function NetworkSettings({
       <Section
         title="Kill Switch"
         icon="shield"
-        description="جلوگیری کامل از نشت ترافیک هنگام قطع‌شدن VPN"
+        description="Fully prevent traffic leaks when the VPN disconnects"
       >
         <Toggle
           label="Kill Switch"
           hint={killSwitchBlocking
-            ? 'فعال — در حال حاضر تمام ترافیک اینترنت مسدود است چون تونل وصل نیست'
-            : 'با قطع‌شدن ناگهانی اتصال، تغییر کانفیگ یا هر نوع افت اتصال، تمام ترافیک اینترنت سیستم مسدود می‌شود تا هیچ داده‌ای بیرون از تونل ارسال نشود؛ فعال‌سازی نیاز به دسترسی مدیر (UAC) دارد.'}
+            ? 'Active — all internet traffic is currently blocked because the tunnel is not connected'
+            : 'If the connection drops unexpectedly, the config changes, or the tunnel degrades in any way, all of the system’s internet traffic is blocked so nothing leaks outside the tunnel; turning it on requires administrator/root access.'}
           checked={!!settings.killSwitchEnabled}
           onChange={(v) => onUpdate({ killSwitchEnabled: v })}
         />
@@ -117,135 +117,135 @@ export default function NetworkSettings({
             <div className="setting-text">
               <span className="setting-label killswitch-active-label">
                 <span className="status-dot blocking" />
-                در حال مسدودسازی ترافیک
+                Blocking traffic
               </span>
-              <span className="setting-hint">برای بازگرداندن فوری اینترنت، Kill Switch را خاموش کن یا دوباره به یک سرور وصل شو.</span>
+              <span className="setting-hint">To restore internet immediately, turn off Kill Switch or reconnect to a server.</span>
             </div>
           </div>
         )}
       </Section>
 
-      <Section title="وضعیت شبکه" icon="signal" description="پروکسی محلی و پروکسی سیستم ویندوز">
+      <Section title="Network Status" icon="signal" description="Local proxy and system proxy">
         <div className="setting-row">
           <div className="setting-text">
             <span className="setting-label net-status-label">
               <span className={`status-dot ${localProxyRunning ? 'connected' : ''}`} />
-              سرویس پروکسی محلی
+              Local proxy service
             </span>
-            <span className="setting-hint">{localProxyRunning ? 'در حال اجرا' : 'متوقف — برای اجرا به یک سرور وصل شو'}</span>
+            <span className="setting-hint">{localProxyRunning ? 'Running' : 'Stopped — connect to a server to start it'}</span>
           </div>
         </div>
         <div className="setting-row">
           <div className="setting-text">
             <span className="setting-label net-status-label">
               <span className={`status-dot ${systemProxyEnabled ? 'connected' : ''}`} />
-              پروکسی سیستم ویندوز
+              System proxy
             </span>
-            <span className="setting-hint">{systemProxyEnabled ? 'فعال — ویندوز از پروکسی محلی استفاده می‌کند' : 'غیرفعال'}</span>
+            <span className="setting-hint">{systemProxyEnabled ? 'Active — the system is using the local proxy' : 'Off'}</span>
           </div>
           <div className="net-btn-row">
             <button className="btn icon-inline-btn" disabled={!localProxyRunning || systemProxyEnabled || busy} onClick={handleSystemProxyEnable}>
-              <Icon name="power" size={13} /> تنظیم پروکسی سیستم
+              <Icon name="power" size={13} /> Set System Proxy
             </button>
             <button className="btn icon-inline-btn" disabled={!systemProxyEnabled || busy} onClick={handleSystemProxyDisable}>
-              <Icon name="stop" size={13} /> بازنشانی
+              <Icon name="stop" size={13} /> Reset
             </button>
           </div>
         </div>
       </Section>
 
-      <Section title="پروکسی محلی — تنظیم دستی" icon="wifi" description="آدرس، پورت و احراز هویت اختیاری برای SOCKS5 و HTTP">
+      <Section title="Local Proxy — Manual Setup" icon="wifi" description="Address, port, and optional authentication for SOCKS5 and HTTP">
         <div className="tabs net-proto-tabs">
           <button className={`tab ${proto === 'socks' ? 'active' : ''}`} onClick={() => setProto('socks')}>SOCKS5</button>
           <button className={`tab ${proto === 'http' ? 'active' : ''}`} onClick={() => setProto('http')}>HTTP</button>
         </div>
 
         <TextField
-          label="آدرس Host/IP"
+          label="Host/IP address"
           value={settings[`${prefix}Host`]}
           disabled={portsLocked}
           placeholder="127.0.0.1"
-          hint="می‌تواند IP یا دامنه باشد؛ 0.0.0.0 یعنی در شبکه‌ی محلی هم قابل‌دسترس باشد"
+          hint="Can be an IP or a domain; 0.0.0.0 makes it reachable from the local network too"
           validate={hostValidate}
           onCommit={(v) => onUpdateChecked({ [`${prefix}Host`]: v })}
         />
         <PortField
-          label={`پورت ${PROTO_LABEL[proto]}`}
+          label={`${PROTO_LABEL[proto]} port`}
           value={settings[`${prefix}Port`]}
           disabled={portsLocked}
           onCommit={(v) => onUpdateChecked({ [`${prefix}Port`]: v })}
         />
         <TextField
-          label="نام کاربری (اختیاری)"
+          label="Username (optional)"
           value={settings[`${prefix}Username`]}
           disabled={portsLocked}
           placeholder="—"
           onCommit={(v) => onUpdateChecked({ [`${prefix}Username`]: v })}
         />
         <PasswordField
-          label="رمز عبور (اختیاری)"
+          label="Password (optional)"
           value={settings[`${prefix}Password`]}
           disabled={portsLocked}
           onCommit={(v) => onUpdateChecked({ [`${prefix}Password`]: v })}
         />
         {portsLocked && (
           <p className="setting-hint" style={{ marginTop: -4, marginBottom: 10 }}>
-            برای تغییر این تنظیمات، اول قطع اتصال کن.
+            Disconnect first to change these settings.
           </p>
         )}
 
         <div className="setting-row">
           <div className="setting-text">
-            <span className="setting-label">آزمایش اتصال</span>
+            <span className="setting-label">Test connection</span>
             <TestResult state={testState[proto]} />
           </div>
           <div className="net-btn-row">
             <button className="btn icon-inline-btn" disabled={!localProxyRunning || testState[proto].status === 'testing'} onClick={() => handleTest(proto)}>
-              <Icon name="target" size={13} /> تست اتصال
+              <Icon name="target" size={13} /> Test Connection
             </button>
             <button className="btn icon-inline-btn" onClick={() => handleResetProto(proto)} disabled={portsLocked}>
-              <Icon name="refresh" size={13} /> بازنشانی این پروتکل
+              <Icon name="refresh" size={13} /> Reset This Protocol
             </button>
           </div>
         </div>
       </Section>
 
-      <Section title="مسیرهای Bypass" icon="filter" description="آدرس‌هایی که همیشه بدون پروکسی، مستقیم باز می‌شوند">
+      <Section title="Bypass Routes" icon="filter" description="Addresses that always open directly, without the proxy">
         <BypassField value={settings.customBypass} onCommit={(v) => onUpdate({ customBypass: v })} />
       </Section>
 
-      <Section title="گزارش زنده‌ی پروکسی" icon="history" description="آخرین رویدادهای پروکسی محلی">
+      <Section title="Live Proxy Log" icon="history" description="Recent local proxy events">
         <ProxyLogFeed logs={logs} />
       </Section>
 
-      <Section title="پیشرفته" icon="sliders" description="پوشه‌ی فایل‌ها و بازنشانی کامل">
+      <Section title="Advanced" icon="sliders" description="File folder and full reset">
         <div className="setting-row">
           <div className="setting-text">
-            <span className="setting-label">پوشه‌ی پروکسی</span>
-            <span className="setting-hint">کانفیگ فعال و لاگ‌های خام Xray</span>
+            <span className="setting-label">Proxy folder</span>
+            <span className="setting-hint">Active config and raw sing-box logs</span>
           </div>
           <button className="btn icon-inline-btn" onClick={onOpenProxyFolder}>
             <Icon name="folder" size={14} />
-            باز کردن
+            Open
           </button>
         </div>
         <div className="setting-row">
           <div className="setting-text">
-            <span className="setting-label">بازنشانی همه‌ی تنظیمات شبکه</span>
-            <span className="setting-hint error">Host/Port/احراز هویت هر دو پروتکل و لیست bypass به حالت پیش‌فرض برمی‌گردند</span>
+            <span className="setting-label">Reset all network settings</span>
+            <span className="setting-hint error">Host/port/authentication for both protocols and the bypass list revert to defaults</span>
           </div>
           <button className="btn icon-inline-btn" disabled={portsLocked} onClick={() => setConfirmResetAll(true)}>
             <Icon name="trash" size={14} />
-            بازنشانی همه
+            Reset All
           </button>
         </div>
       </Section>
 
       {confirmResetAll && (
         <ConfirmModal
-          title="بازنشانی تنظیمات شبکه"
-          message="همه‌ی تنظیمات دستی SOCKS5 و HTTP (آدرس، پورت، احراز هویت) و لیست bypass به حالت پیش‌فرض بازمی‌گردند. ادامه می‌دهی؟"
-          confirmLabel="بازنشانی"
+          title="Reset Network Settings"
+          message="All manual SOCKS5 and HTTP settings (address, port, authentication) and the bypass list will revert to their defaults. Continue?"
+          confirmLabel="Reset"
           onClose={() => setConfirmResetAll(false)}
           onConfirm={onResetNetworkDefaults}
         />

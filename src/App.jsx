@@ -23,13 +23,13 @@ function TitleBar({ maximized, onMinimize, onToggleMaximize, onClose }) {
       </div>
       <div className="titlebar-drag" onDoubleClick={onToggleMaximize} />
       <div className="titlebar-controls">
-        <button className="tb-btn" onClick={onMinimize} title="کوچک‌کردن">
+        <button className="tb-btn" onClick={onMinimize} title="Minimize">
           <Icon name="winMinimize" size={13} />
         </button>
-        <button className="tb-btn" onClick={onToggleMaximize} title={maximized ? 'بازگردانی' : 'بیشینه‌سازی'}>
+        <button className="tb-btn" onClick={onToggleMaximize} title={maximized ? 'Restore' : 'Maximize'}>
           <Icon name={maximized ? 'winRestore' : 'winMaximize'} size={12} />
         </button>
-        <button className="tb-btn close" onClick={onClose} title="بستن">
+        <button className="tb-btn close" onClick={onClose} title="Close">
           <Icon name="close" size={13} />
         </button>
       </div>
@@ -129,7 +129,7 @@ export default function App() {
       try {
         text = await navigator.clipboard.readText();
       } catch {
-        showToast('دسترسی به کلیپ‌بورد ممکن نشد', 'error');
+        showToast('Could not access the clipboard', 'error');
         return;
       }
       text = (text || '').trim();
@@ -141,10 +141,10 @@ export default function App() {
         } else if (/^https?:\/\//i.test(text)) {
           await handleAddSubscription(text);
         } else {
-          showToast('محتوای کلیپ‌بورد یک کانفیگ یا لینک سابسکریپشن معتبر نیست', 'error');
+          showToast('Clipboard content is not a valid config or subscription link', 'error');
         }
       } catch (err) {
-        showToast(err.message || 'خطا در افزودن از کلیپ‌بورد', 'error');
+        showToast(err.message || 'Failed to add from clipboard', 'error');
       }
     };
     window.addEventListener('keydown', onKey);
@@ -210,14 +210,14 @@ export default function App() {
         await window.soul.disconnect();
       } else {
         if (!activeProfileId) {
-          showToast('اول یک کانفیگ را انتخاب کن');
+          showToast('Select a server first');
           setBusy(false);
           return;
         }
         await window.soul.connect(activeProfileId);
       }
     } catch (err) {
-      showToast(err.message || 'خطا در اتصال');
+      showToast(err.message || 'Connection failed');
     } finally {
       setBusy(false);
     }
@@ -229,7 +229,7 @@ export default function App() {
       try {
         await window.soul.connect(id);
       } catch (err) {
-        showToast(err.message || 'خطا در اتصال');
+        showToast(err.message || 'Connection failed');
       } finally {
         setBusy(false);
       }
@@ -252,7 +252,7 @@ export default function App() {
   const handleEditProfile = useCallback(async (id, link) => {
     const updated = await window.soul.updateProfile(id, link);
     setProfiles(updated);
-    showToast('کانفیگ به‌روزرسانی شد');
+    showToast('Config updated');
   }, [showToast]);
 
   const handlePing = useCallback(async (id) => {
@@ -278,7 +278,7 @@ export default function App() {
     try {
       await window.soul.connect(id);
     } catch (err) {
-      showToast(err.message || 'خطا در اتصال');
+      showToast(err.message || 'Connection failed');
     } finally {
       setBusy(false);
     }
@@ -290,7 +290,7 @@ export default function App() {
     try {
       await window.soul.disconnect();
     } catch (err) {
-      showToast(err.message || 'خطا در قطع اتصال');
+      showToast(err.message || 'Failed to disconnect');
     } finally {
       setBusy(false);
     }
@@ -301,7 +301,7 @@ export default function App() {
       const updated = await window.soul.setFavorite(profile.id, !profile.favorite);
       setProfiles(updated);
     } catch (err) {
-      showToast(err.message || 'خطا در ذخیره');
+      showToast(err.message || 'Failed to save');
     }
   }, [showToast]);
 
@@ -309,21 +309,21 @@ export default function App() {
     await window.soul.addLink(link);
     await refresh();
     setShowAdd(false);
-    showToast('کانفیگ اضافه شد');
+    showToast('Config added');
   }, [refresh, showToast]);
 
   const handleAddSubscription = useCallback(async (url) => {
     const { profiles: added } = await window.soul.addSubscription(url);
     await refresh();
     setShowAdd(false);
-    showToast(`${added.length} کانفیگ از ساب‌اسکریپشن اضافه شد`);
+    showToast(`${added.length} configs added from subscription`);
   }, [refresh, showToast]);
 
   const handleAddCustom = useCallback(async (fields) => {
     await window.soul.addCustomConfig(fields);
     await refresh();
     setShowAdd(false);
-    showToast('کانفیگ اضافه شد');
+    showToast('Config added');
   }, [refresh, showToast]);
 
   const handleRefreshSubscription = useCallback(async (id) => {
@@ -332,9 +332,9 @@ export default function App() {
     try {
       const { profiles: added } = await window.soul.refreshSubscription(id);
       await refresh();
-      showToast(`${added.length} کانفیگ به‌روزرسانی شد`);
+      showToast(`${added.length} configs updated`);
     } catch (err) {
-      showToast(err.message || 'خطا در به‌روزرسانی');
+      showToast(err.message || 'Update failed');
     } finally {
       setRefreshingSubIds((prev) => {
         const next = new Set(prev);
@@ -350,9 +350,9 @@ export default function App() {
     try {
       await window.soul.refreshAllSubscriptions();
       await refresh();
-      showToast('همه‌ی ساب‌اسکریپشن‌ها به‌روزرسانی شدند');
+      showToast('All subscriptions updated');
     } catch (err) {
-      showToast(err.message || 'خطا در به‌روزرسانی');
+      showToast(err.message || 'Update failed');
     } finally {
       setUpdatingSubs(false);
     }
@@ -367,7 +367,7 @@ export default function App() {
   const handleUpdateSubscription = useCallback(async (id, patch) => {
     const updated = await window.soul.updateSubscription(id, patch);
     setSubscriptions(updated);
-    showToast('ساب‌اسکریپشن به‌روزرسانی شد');
+    showToast('Subscription updated');
   }, [showToast]);
 
   const handleSetMode = useCallback(async (mode) => {
@@ -376,7 +376,7 @@ export default function App() {
       await window.soul.setMode(mode);
       setConnectionMode(mode);
     } catch (err) {
-      showToast(err.message || 'خطا در تغییر حالت');
+      showToast(err.message || 'Failed to change mode');
     }
   }, [connectionMode, connectionState, showToast]);
 
@@ -385,7 +385,7 @@ export default function App() {
       const updated = await window.soul.updateSettings(patch);
       setSettings(updated);
     } catch (err) {
-      showToast(err.message || 'خطا در ذخیره تنظیمات');
+      showToast(err.message || 'Failed to save settings');
     }
   }
 
@@ -397,7 +397,7 @@ export default function App() {
       setSettings(updated);
       return updated;
     } catch (err) {
-      showToast(err.message || 'خطا در ذخیره تنظیمات');
+      showToast(err.message || 'Failed to save settings');
       throw err;
     }
   }
@@ -405,9 +405,9 @@ export default function App() {
   async function handleExportBackup() {
     try {
       const res = await window.soul.exportBackup();
-      if (!res.canceled) showToast('پشتیبان‌گیری با موفقیت انجام شد');
+      if (!res.canceled) showToast('Backup completed successfully');
     } catch (err) {
-      showToast(err.message || 'خطا در پشتیبان‌گیری');
+      showToast(err.message || 'Backup failed');
     }
   }
 
@@ -416,10 +416,10 @@ export default function App() {
       const res = await window.soul.importBackup();
       if (!res.canceled) {
         await refresh();
-        showToast(`${res.profiles} کانفیگ بازیابی شد`);
+        showToast(`${res.profiles} configs restored`);
       }
     } catch (err) {
-      showToast(err.message || 'خطا در بازیابی');
+      showToast(err.message || 'Restore failed');
     }
   }
 
@@ -437,9 +437,9 @@ export default function App() {
     try {
       await window.soul.systemProxyEnable();
       setSystemProxyEnabled(true);
-      showToast('پروکسی سیستم فعال شد');
+      showToast('System proxy enabled');
     } catch (err) {
-      showToast(err.message || 'خطا در فعال‌سازی پروکسی سیستم', 'error');
+      showToast(err.message || 'Failed to enable system proxy', 'error');
     }
   }, [showToast]);
 
@@ -447,9 +447,9 @@ export default function App() {
     try {
       await window.soul.systemProxyDisable();
       setSystemProxyEnabled(false);
-      showToast('پروکسی سیستم بازنشانی شد');
+      showToast('System proxy reset');
     } catch (err) {
-      showToast(err.message || 'خطا در بازنشانی پروکسی سیستم', 'error');
+      showToast(err.message || 'Failed to reset system proxy', 'error');
     }
   }, [showToast]);
 
@@ -460,9 +460,9 @@ export default function App() {
       const updated = await window.soul.updateSettings({ killSwitchEnabled: false });
       setSettings(updated);
       setKillSwitchBlocking(false);
-      showToast('Kill Switch غیرفعال شد و اینترنت آزاد شد');
+      showToast('Kill Switch disabled and internet unblocked');
     } catch (err) {
-      showToast(err.message || 'خطا در غیرفعال‌سازی Kill Switch', 'error');
+      showToast(err.message || 'Failed to disable Kill Switch', 'error');
     }
   }, [showToast]);
 
@@ -470,9 +470,9 @@ export default function App() {
     try {
       const updated = await window.soul.resetNetworkDefaults();
       setSettings(updated);
-      showToast('تنظیمات شبکه بازنشانی شد');
+      showToast('Network settings reset');
     } catch (err) {
-      showToast(err.message || 'خطا در بازنشانی تنظیمات شبکه', 'error');
+      showToast(err.message || 'Failed to reset network settings', 'error');
     }
   }, [showToast]);
 
@@ -496,7 +496,7 @@ export default function App() {
             <div className="brand">
               <span className="brand-name">Soul Connection</span>
               <span className="brand-sub">
-                {profiles.length ? `${profiles.length} کانفیگ` : 'کلاینت V2Ray / Xray'}
+                {profiles.length ? `${profiles.length} configs` : 'sing-box client'}
               </span>
             </div>
           </header>
@@ -533,12 +533,12 @@ export default function App() {
             <footer className="sidebar-foot">
               <button className="btn primary add-btn" onClick={() => setShowAdd(true)}>
                 <Icon name="plus" size={15} />
-                افزودن کانفیگ
+                Add Config
               </button>
               <button
                 className="icon-btn tall"
                 onClick={() => setFinderOpen(true)}
-                title="سرور یاب هوشمند (Ctrl+K)"
+                title="Smart Server Finder (Ctrl+K)"
               >
                 <Icon name="radar" size={15} />
               </button>
@@ -548,11 +548,11 @@ export default function App() {
 
         <main className="main">
           <header className="main-head">
-            <span className="main-title">{tab === 'settings' ? 'تنظیمات' : 'کنترل اتصال'}</span>
+            <span className="main-title">{tab === 'settings' ? 'Settings' : 'Connection Control'}</span>
             <button
               className="icon-btn ghost"
               onClick={() => setTab(tab === 'settings' ? 'servers' : 'settings')}
-              title={tab === 'settings' ? 'بازگشت به کنترل اتصال' : 'تنظیمات'}
+              title={tab === 'settings' ? 'Back to Connection Control' : 'Settings'}
             >
               <Icon name={tab === 'settings' ? 'close' : 'settings'} size={16} />
             </button>
@@ -600,10 +600,10 @@ export default function App() {
             <div className="killswitch-banner" role="alert">
               <Icon name="shield" size={16} />
               <span className="killswitch-banner-text">
-                Kill Switch فعال است — تمام ترافیک اینترنت مسدود شده تا وقتی دوباره وصل شوی.
+                Kill Switch is active — all internet traffic is blocked until you reconnect.
               </span>
               <button className="btn danger killswitch-banner-btn" onClick={handleEmergencyDisableKillSwitch}>
-                غیرفعال‌سازی اضطراری
+                Emergency Disable
               </button>
             </div>
           )}

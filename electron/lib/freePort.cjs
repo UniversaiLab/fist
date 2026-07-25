@@ -17,7 +17,7 @@ async function findFreePort(preferredPort) {
   for (let port = preferredPort + 1; port < preferredPort + 200; port++) {
     if (await isPortFree(port)) return port;
   }
-  throw new Error('هیچ پورت آزادی برای اجرای پروکسی پیدا نشد');
+  throw new Error('No free port found to run the proxy on');
 }
 
 module.exports = { findFreePort };

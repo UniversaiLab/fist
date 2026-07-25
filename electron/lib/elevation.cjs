@@ -1,9 +1,13 @@
 'use strict';
-const { execFile } = require('child_process');
+const { execFile, spawn } = require('child_process');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
 
+// ---- Windows ----
 // "net session" only succeeds when the current process holds admin rights --
 // a standard, dependency-free way to check elevation on Windows.
-function isElevated() {
+function winIsElevated() {
   return new Promise((resolve) => {
     execFile('net', ['session'], { windowsHide: true }, (err) => resolve(!err));
   });
@@ -17,7 +21,7 @@ function isElevated() {
 // (or it fails for any other reason), Start-Process throws immediately and
 // we resolve false instead -- callers must fall back to something visible
 // rather than assuming the relaunch always succeeds.
-function relaunchElevated(app) {
+function winRelaunchElevated(app) {
   const exePath = process.execPath;
   const appPath = app.isPackaged ? null : app.getAppPath();
 
@@ -45,6 +49,85 @@ function relaunchElevated(app) {
       }
     );
   });
+}
+
+// ---- macOS ----
+// Relaunches via `do shell script ... with administrator privileges`, which
+// is AppleScript's standard way to trigger the native GUI password prompt
+// (the same one macOS itself uses). The relaunch command is written to a
+// small temp script (backgrounded with `&`) rather than embedded inline in
+// the AppleScript string, since nesting this app's own path -- which can
+// contain spaces or quotes -- inside two layers of shell/AppleScript quoting
+// is exactly the kind of thing that silently breaks.
+function macIsElevated() {
+  return Promise.resolve(typeof process.getuid === 'function' && process.getuid() === 0);
+}
+
+function macRelaunchElevated(app) {
+  const exePath = process.execPath;
+  const appPath = app.isPackaged ? null : app.getAppPath();
+  const tmpScript = path.join(os.tmpdir(), `soulconnection-relaunch-${Date.now()}.sh`);
+  const relaunchCmd = appPath ? `"${exePath}" "${appPath}"` : `"${exePath}"`;
+  fs.writeFileSync(tmpScript, `#!/bin/sh\nexec ${relaunchCmd} >/dev/null 2>&1 &\n`, { mode: 0o755 });
+
+  return new Promise((resolve) => {
+    execFile('osascript', ['-e', `do shell script "${tmpScript}" with administrator privileges`], (err) => {
+      try { fs.unlinkSync(tmpScript); } catch { /* ignore */ }
+      if (err) {
+        resolve(false);
+        return;
+      }
+      app.exit(0);
+      resolve(true);
+    });
+  });
+}
+
+// ---- Linux ----
+// pkexec (PolicyKit) is the closest cross-desktop equivalent of UAC/the macOS
+// prompt: a native GUI password dialog on GNOME/KDE/most distros with
+// PolicyKit installed. Unlike execFile above, pkexec's own process stays
+// attached to (and waits on) whatever it launches, so waiting for it to exit
+// would block until the *elevated* app itself quits -- spawn it detached and
+// resolve as soon as the pkexec process itself has started, mirroring how the
+// Windows/macOS paths above also resolve before the user has necessarily
+// finished interacting with the prompt.
+function linuxIsElevated() {
+  return Promise.resolve(typeof process.getuid === 'function' && process.getuid() === 0);
+}
+
+function linuxRelaunchElevated(app) {
+  const exePath = process.execPath;
+  const appPath = app.isPackaged ? null : app.getAppPath();
+  const args = appPath ? [exePath, appPath] : [exePath];
+
+  return new Promise((resolve) => {
+    let child;
+    try {
+      child = spawn('pkexec', args, { detached: true, stdio: 'ignore' });
+    } catch {
+      resolve(false);
+      return;
+    }
+    child.once('error', () => resolve(false));
+    child.once('spawn', () => {
+      child.unref();
+      app.exit(0);
+      resolve(true);
+    });
+  });
+}
+
+function isElevated() {
+  if (process.platform === 'win32') return winIsElevated();
+  if (process.platform === 'darwin') return macIsElevated();
+  return linuxIsElevated();
+}
+
+function relaunchElevated(app) {
+  if (process.platform === 'win32') return winRelaunchElevated(app);
+  if (process.platform === 'darwin') return macRelaunchElevated(app);
+  return linuxRelaunchElevated(app);
 }
 
 module.exports = { isElevated, relaunchElevated };

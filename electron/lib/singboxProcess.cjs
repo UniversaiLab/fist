@@ -4,10 +4,10 @@ const fs = require('fs');
 const path = require('path');
 const { EventEmitter } = require('events');
 
-class XrayProcess extends EventEmitter {
-  constructor(xrayBinPath, workDir) {
+class SingBoxProcess extends EventEmitter {
+  constructor(singboxBinPath, workDir) {
     super();
-    this.xrayBinPath = xrayBinPath;
+    this.singboxBinPath = singboxBinPath;
     this.workDir = workDir;
     this.proc = null;
     this.configPath = path.join(workDir, 'active-config.json');
@@ -21,14 +21,14 @@ class XrayProcess extends EventEmitter {
   start(config) {
     return new Promise((resolve, reject) => {
       if (this.isRunning) {
-        return reject(new Error('Xray is already running'));
+        return reject(new Error('sing-box is already running'));
       }
       fs.mkdirSync(this.workDir, { recursive: true });
       fs.writeFileSync(this.configPath, JSON.stringify(config, null, 2), 'utf8');
 
       this.logLines = [];
-      const proc = spawn(this.xrayBinPath, ['run', '-c', this.configPath], {
-        cwd: path.dirname(this.xrayBinPath),
+      const proc = spawn(this.singboxBinPath, ['run', '-c', this.configPath], {
+        cwd: path.dirname(this.singboxBinPath),
         windowsHide: true,
       });
       this.proc = proc;
@@ -44,7 +44,14 @@ class XrayProcess extends EventEmitter {
         this.logLines.push(text);
         if (this.logLines.length > 500) this.logLines.shift();
         this.emit('log', text);
-        if (!settled && /started/i.test(text)) {
+        if (!settled && /fatal/i.test(text)) {
+          settled = true;
+          reject(new Error(text.trim()));
+          return;
+        }
+        // sing-box logs a line like "sing-box started (123.4ms)" once every
+        // service (including TUN) is up.
+        if (!settled && /sing-box started/i.test(text)) {
           settled = true;
           resolve();
         }
@@ -65,10 +72,14 @@ class XrayProcess extends EventEmitter {
         if (!settled) {
           settled = true;
           if (code === 0 || code === null) resolve();
-          else reject(new Error(`Xray exited with code ${code}:\n${this.logLines.join('')}`));
+          else reject(new Error(`sing-box exited with code ${code}:\n${this.logLines.join('')}`));
         }
       });
 
+      // Fallback in case the expected log line's wording changes between
+      // sing-box versions -- mirrors the same safety net the xray-core process
+      // manager used, so a startup that produced no fatal errors is still
+      // treated as successful even if the "started" marker text drifts.
       setTimeout(() => {
         if (!settled) { settled = true; resolve(); }
       }, 1500);
@@ -92,4 +103,4 @@ class XrayProcess extends EventEmitter {
   }
 }
 
-module.exports = { XrayProcess };
+module.exports = { SingBoxProcess };

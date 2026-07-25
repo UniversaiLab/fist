@@ -172,6 +172,60 @@ function parseSS(link) {
   return p;
 }
 
+// Hysteria2's own URI scheme: hysteria2://[auth]@host:port/?insecure=&sni=&
+// obfs=salamander&obfs-password=&pinSHA256=&up=&down=#name -- "hy2://" is an
+// accepted alias for the same thing.
+function parseHysteria2(link) {
+  const u = safeUrl(link);
+  if (!u || !u.hostname) return null;
+  const p = baseProfile('hysteria2', link);
+  p.password = decodeURIComponent(u.username || '');
+  p.address = u.hostname.replace(/^\[|\]$/g, '');
+  p.port = Number(u.port) || 443;
+  p.name = decodeURIComponent(u.hash.slice(1)) || `${p.address}:${p.port}`;
+  p.security = 'tls';
+  p.sni = q(u, 'sni') || q(u, 'peer') || '';
+  p.allowInsecure = q(u, 'insecure') === '1' || q(u, 'insecure') === 'true';
+  p.obfsPassword = q(u, 'obfs') && q(u, 'obfs').toLowerCase() !== 'none' ? (q(u, 'obfs-password') || q(u, 'obfsParam') || '') : '';
+  p.upMbps = Number(q(u, 'up') || q(u, 'upmbps')) || 0;
+  p.downMbps = Number(q(u, 'down') || q(u, 'downmbps')) || 0;
+  return p;
+}
+
+// MTProto proxies are consumed directly by Telegram (server/port/secret),
+// never tunneled system-wide, so this only ever powers parse/store/QR-export
+// (see AddModal.jsx/QrModal.jsx), not a connectable profile.
+function parseMtproto(link) {
+  let server = '';
+  let port = 0;
+  let secret = '';
+  let name = '';
+  if (link.startsWith('mtproto://')) {
+    const u = safeUrl(link);
+    if (!u || !u.hostname) return null;
+    server = u.hostname;
+    port = Number(u.port) || 443;
+    secret = q(u, 'secret') || decodeURIComponent(u.username || '');
+    name = decodeURIComponent(u.hash.slice(1)) || '';
+  } else {
+    // tg://proxy?server=&port=&secret=  or  https://t.me/proxy?server=&port=&secret=
+    const u = safeUrl(link);
+    if (!u) return null;
+    server = q(u, 'server');
+    port = Number(q(u, 'port')) || 443;
+    secret = q(u, 'secret');
+    name = decodeURIComponent(u.hash.slice(1)) || '';
+  }
+  if (!server || !secret) return null;
+  const p = baseProfile('mtproto', link);
+  p.address = server;
+  p.port = port;
+  p.secret = secret;
+  p.tunnelable = false;
+  p.name = name || `${server}:${port}`;
+  return p;
+}
+
 function parseLink(link) {
   link = String(link || '').trim();
   if (!link) return null;
@@ -180,6 +234,9 @@ function parseLink(link) {
     if (link.startsWith('vless://')) return parseVless(link);
     if (link.startsWith('trojan://')) return parseTrojan(link);
     if (link.startsWith('ss://')) return parseSS(link);
+    if (link.startsWith('hysteria2://') || link.startsWith('hy2://')) return parseHysteria2(link);
+    if (link.startsWith('mtproto://')) return parseMtproto(link);
+    if (link.startsWith('tg://proxy') || /^https:\/\/t\.me\/proxy/i.test(link)) return parseMtproto(link);
   } catch {
     return null;
   }
@@ -306,12 +363,33 @@ function b64UrlEncode(s) {
   return Buffer.from(s, 'utf8').toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
+function buildHysteria2Link(p) {
+  const pairs = [
+    ['sni', p.sni || undefined],
+    ['insecure', p.allowInsecure ? '1' : undefined],
+    ['obfs', p.obfsPassword ? 'salamander' : undefined],
+    ['obfs-password', p.obfsPassword || undefined],
+    ['up', p.upMbps || undefined],
+    ['down', p.downMbps || undefined],
+  ];
+  const name = encodeURIComponent(p.name || '');
+  return `hysteria2://${encodeURIComponent(p.password)}@${p.address}:${p.port}${qs(pairs)}#${name}`;
+}
+
+function buildMtprotoLink(p) {
+  const pairs = [['server', p.address], ['port', p.port], ['secret', p.secret]];
+  const name = encodeURIComponent(p.name || '');
+  return `tg://proxy${qs(pairs)}#${name}`;
+}
+
 function buildLink(p) {
   switch (p.protocol) {
     case 'vmess': return buildVmessLink(p);
     case 'vless': return buildVlessLink(p);
     case 'trojan': return buildTrojanLink(p);
     case 'shadowsocks': return buildSsLink(p);
+    case 'hysteria2': return buildHysteria2Link(p);
+    case 'mtproto': return buildMtprotoLink(p);
     default: return null;
   }
 }
@@ -338,19 +416,19 @@ function str(v, max = 256) {
 function buildCustomProfile(fields) {
   const f = fields || {};
   const protocol = str(f.protocol);
-  if (!CUSTOM_PROTOCOLS.has(protocol)) throw new Error('پروتکل نامعتبر است');
+  if (!CUSTOM_PROTOCOLS.has(protocol)) throw new Error('Invalid protocol');
 
   const address = str(f.address, 253);
-  if (!address) throw new Error('آدرس سرور را وارد کن');
+  if (!address) throw new Error('Enter the server address');
 
   const port = Number(f.port);
-  if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('پورت باید بین ۱ تا ۶۵۵۳۵ باشد');
+  if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('Port must be between 1 and 65535');
 
   const network = str(f.network) || 'tcp';
-  if (!CUSTOM_NETWORKS.has(network)) throw new Error('نوع شبکه نامعتبر است');
+  if (!CUSTOM_NETWORKS.has(network)) throw new Error('Invalid network type');
 
   let security = str(f.security) || 'none';
-  if (!CUSTOM_SECURITIES.has(security)) throw new Error('نوع امنیت نامعتبر است');
+  if (!CUSTOM_SECURITIES.has(security)) throw new Error('Invalid security type');
   if (protocol === 'vmess' && security === 'reality') security = 'tls'; // vmess has no Reality support
 
   const p = baseProfile(protocol, null);
@@ -374,7 +452,7 @@ function buildCustomProfile(fields) {
 
   if (protocol === 'vmess' || protocol === 'vless') {
     const uuid = str(f.uuid);
-    if (!UUID_RE.test(uuid)) throw new Error('UUID نامعتبر است (فرمت صحیح: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)');
+    if (!UUID_RE.test(uuid)) throw new Error('Invalid UUID (correct format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)');
     p.uuid = uuid;
   }
   if (protocol === 'vmess') {
@@ -388,15 +466,15 @@ function buildCustomProfile(fields) {
   }
   if (protocol === 'trojan') {
     const password = str(f.password, 256);
-    if (!password) throw new Error('رمز عبور را وارد کن');
+    if (!password) throw new Error('Enter a password');
     p.password = password;
     if (!f.security) p.security = 'tls'; // matches parseTrojan's own forced default
   }
   if (protocol === 'shadowsocks') {
     const method = str(f.method);
-    if (!SS_METHODS.has(method)) throw new Error('روش رمزنگاری نامعتبر است');
+    if (!SS_METHODS.has(method)) throw new Error('Invalid encryption method');
     const password = str(f.password, 256);
-    if (!password) throw new Error('رمز عبور را وارد کن');
+    if (!password) throw new Error('Enter a password');
     p.method = method;
     p.password = password;
     p.network = 'tcp';

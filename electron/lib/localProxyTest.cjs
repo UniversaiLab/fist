@@ -19,7 +19,7 @@ function socksProbe(host, port, username, password) {
     };
 
     socket.setTimeout(TIMEOUT_MS);
-    socket.once('timeout', () => finish({ ok: false, reason: 'timeout', message: 'پاسخی دریافت نشد' }));
+    socket.once('timeout', () => finish({ ok: false, reason: 'timeout', message: 'No response received' }));
     socket.once('error', (err) => finish({ ok: false, reason: 'refused', message: err.message }));
 
     socket.once('connect', () => {
@@ -32,10 +32,10 @@ function socksProbe(host, port, username, password) {
     socket.on('data', (buf) => {
       if (stage === 'greeting') {
         if (buf.length < 2 || buf[0] !== 0x05) {
-          return finish({ ok: false, reason: 'protocol-mismatch', message: 'پاسخ SOCKS5 معتبر نبود' });
+          return finish({ ok: false, reason: 'protocol-mismatch', message: 'Invalid SOCKS5 response' });
         }
         if (buf[1] === 0xff) {
-          return finish({ ok: false, reason: 'no-acceptable-auth', message: 'سرور روش احراز هویت را نپذیرفت' });
+          return finish({ ok: false, reason: 'no-acceptable-auth', message: 'Server rejected the authentication method' });
         }
         if (buf[1] === 0x02 && username) {
           stage = 'auth';
@@ -53,7 +53,7 @@ function socksProbe(host, port, username, password) {
         if (buf.length >= 2 && buf[1] === 0x00) {
           return finish({ ok: true, ms: Date.now() - start });
         }
-        return finish({ ok: false, reason: 'auth-failed', message: 'نام کاربری یا رمز عبور اشتباه است' });
+        return finish({ ok: false, reason: 'auth-failed', message: 'Incorrect username or password' });
       }
     });
 
@@ -74,7 +74,7 @@ function httpProbe(host, port, username, password) {
     };
 
     socket.setTimeout(TIMEOUT_MS);
-    socket.once('timeout', () => finish({ ok: false, reason: 'timeout', message: 'پاسخی دریافت نشد' }));
+    socket.once('timeout', () => finish({ ok: false, reason: 'timeout', message: 'No response received' }));
     socket.once('error', (err) => finish({ ok: false, reason: 'refused', message: err.message }));
 
     socket.once('connect', () => {
@@ -93,15 +93,15 @@ function httpProbe(host, port, username, password) {
       if (idx === -1) return;
       const statusLine = buf.slice(0, idx);
       const match = statusLine.match(/^HTTP\/1\.[01] (\d{3})/);
-      if (!match) return finish({ ok: false, reason: 'protocol-mismatch', message: 'پاسخ HTTP معتبر نبود' });
+      if (!match) return finish({ ok: false, reason: 'protocol-mismatch', message: 'Invalid HTTP response' });
       const code = Number(match[1]);
       if (code >= 200 && code < 300) return finish({ ok: true, ms: Date.now() - start });
       if (code === 407) {
         return finish(username
-          ? { ok: false, reason: 'auth-failed', message: 'نام کاربری یا رمز عبور اشتباه است' }
+          ? { ok: false, reason: 'auth-failed', message: 'Incorrect username or password' }
           : { ok: true, ms: Date.now() - start }); // listener alive, just needs credentials
       }
-      return finish({ ok: false, reason: 'unexpected-status', message: `کد وضعیت غیرمنتظره: ${code}` });
+      return finish({ ok: false, reason: 'unexpected-status', message: `Unexpected status code: ${code}` });
     });
 
     socket.connect(port, host);
@@ -111,7 +111,7 @@ function httpProbe(host, port, username, password) {
 async function testLocalProxy({ protocol, host, port, username, password }) {
   if (protocol === 'socks') return socksProbe(host, port, username, password);
   if (protocol === 'http') return httpProbe(host, port, username, password);
-  return { ok: false, reason: 'invalid-protocol', message: 'پروتکل نامعتبر' };
+  return { ok: false, reason: 'invalid-protocol', message: 'Invalid protocol' };
 }
 
 module.exports = { testLocalProxy };

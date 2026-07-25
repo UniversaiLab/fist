@@ -17,9 +17,9 @@ function pingClass(ms) {
 }
 
 function pingLabel(ms) {
-  if (ms === undefined) return 'پینگ';
+  if (ms === undefined) return 'Ping';
   if (ms === 'measuring') return '…';
-  if (ms === -1) return 'خطا';
+  if (ms === -1) return 'Error';
   return `${ms}ms`;
 }
 
@@ -53,7 +53,7 @@ const ServerCard = React.memo(function ServerCard({ profile, active, ms, onSelec
       <button className={`ping ${pingClass(ms)}`} onClick={() => onPing(profile.id)}>
         {pingLabel(ms)}
       </button>
-      <button className="del" onClick={() => onRequestDelete(profile)} title="حذف">
+      <button className="del" onClick={() => onRequestDelete(profile)} title="Delete">
         <Icon name="close" size={13} />
       </button>
     </div>
@@ -105,12 +105,12 @@ export default function ServerList({
   // already in flight (e.g. started from the finder).
   const startSubTest = useCallback((sub, mode, autoConnectBest) => {
     if (engine.getSnapshot().status !== 'idle') {
-      onToast?.('یک تست دیگر در حال اجراست — صبر کن تا تمام شود', 'error');
+      onToast?.('Another test is already running — wait for it to finish', 'error');
       return;
     }
     const subProfiles = profiles.filter((p) => p.subId === sub.id);
     if (!subProfiles.length) {
-      onToast?.('این ساب‌اسکریپشن کانفیگی ندارد', 'error');
+      onToast?.('This subscription has no configs', 'error');
       return;
     }
     setTestModal({ sub, mode, autoConnectBest });
@@ -122,7 +122,7 @@ export default function ServerList({
   const copyText = useCallback((text, msg) => {
     navigator.clipboard?.writeText(text)
       .then(() => onToast?.(msg))
-      .catch(() => onToast?.('کپی ناموفق بود', 'error'));
+      .catch(() => onToast?.('Copy failed', 'error'));
   }, [onToast]);
 
   const openProfileMenu = useCallback((e, profile) => {
@@ -130,15 +130,15 @@ export default function ServerList({
     const isActiveConnected = profile.id === activeProfileId && (connectionState === 'connected' || connectionState === 'connecting');
     const items = [
       isActiveConnected
-        ? { icon: 'stop', label: 'قطع اتصال', onClick: () => onDisconnect() }
-        : { icon: 'power', label: 'اتصال', onClick: () => onConnectTo(profile.id) },
-      { icon: 'gauge', label: 'نمایش پینگ', onClick: () => onPing(profile.id) },
-      { icon: 'edit', label: 'ویرایش', sepBefore: true, onClick: () => setModal({ type: 'editProfile', profile }) },
-      { icon: 'edit', label: 'تغییر نام', onClick: () => setModal({ type: 'renameProfile', profile }) },
-      { icon: 'copy', label: 'کپی', onClick: () => copyText(profile.link, 'لینک کپی شد') },
-      { icon: 'arrowUp', label: 'اشتراک‌گذاری / خروجی گرفتن', onClick: () => copyText(profile.link, 'لینک برای اشتراک‌گذاری کپی شد') },
-      { icon: 'qrcode', label: 'اشتراک‌گذاری با QR', onClick: () => setModal({ type: 'qr', value: profile.link, title: profile.name || profile.address, subtitle: `${profile.address}:${profile.port}` }) },
-      { icon: 'trash', label: 'حذف', danger: true, sepBefore: true, onClick: () => requestDeleteProfile(profile) },
+        ? { icon: 'stop', label: 'Disconnect', onClick: () => onDisconnect() }
+        : { icon: 'power', label: 'Connect', onClick: () => onConnectTo(profile.id) },
+      { icon: 'gauge', label: 'Show ping', onClick: () => onPing(profile.id) },
+      { icon: 'edit', label: 'Edit', sepBefore: true, onClick: () => setModal({ type: 'editProfile', profile }) },
+      { icon: 'edit', label: 'Rename', onClick: () => setModal({ type: 'renameProfile', profile }) },
+      { icon: 'copy', label: 'Copy', onClick: () => copyText(profile.link, 'Link copied') },
+      { icon: 'arrowUp', label: 'Share / Export', onClick: () => copyText(profile.link, 'Link copied for sharing') },
+      { icon: 'qrcode', label: 'Share via QR', onClick: () => setModal({ type: 'qr', value: profile.link, title: profile.name || profile.address, subtitle: `${profile.address}:${profile.port}` }) },
+      { icon: 'trash', label: 'Delete', danger: true, sepBefore: true, onClick: () => requestDeleteProfile(profile) },
     ];
     setCtxMenu({ x: e.clientX, y: e.clientY, title: profile.name || profile.address, items });
   }, [activeProfileId, connectionState, onDisconnect, onConnectTo, onPing, requestDeleteProfile, copyText]);
@@ -146,15 +146,15 @@ export default function ServerList({
   const openSubMenu = useCallback((e, sub) => {
     e.preventDefault();
     const items = [
-      { icon: 'bolt', label: 'اتصال به بهترین سرور', onClick: () => startSubTest(sub, 'ping', true) },
-      { icon: 'gauge', label: 'پینگ گرفتن از تمام سرورها', onClick: () => startSubTest(sub, 'ping', false) },
-      { icon: 'refresh', label: 'به‌روزرسانی ساب‌اسکریپشن', sepBefore: true, onClick: () => onRefreshSubscription(sub.id) },
-      { icon: 'edit', label: 'ویرایش', sepBefore: true, onClick: () => setModal({ type: 'editSub', sub }) },
-      { icon: 'edit', label: 'تغییر نام', onClick: () => setModal({ type: 'renameSub', sub }) },
-      { icon: 'copy', label: 'کپی لینک', onClick: () => copyText(sub.url, 'لینک ساب‌اسکریپشن کپی شد') },
-      { icon: 'qrcode', label: 'اشتراک‌گذاری با QR', onClick: () => setModal({ type: 'qr', value: sub.url, title: sub.name, subtitle: `${sub.configCount ?? 0} کانفیگ` }) },
-      { icon: 'info', label: 'مشاهده اطلاعات', onClick: () => setModal({ type: 'details', sub }) },
-      { icon: 'trash', label: 'حذف', danger: true, sepBefore: true, onClick: () => requestDeleteSubscription(sub) },
+      { icon: 'bolt', label: 'Connect to best server', onClick: () => startSubTest(sub, 'ping', true) },
+      { icon: 'gauge', label: 'Ping all servers', onClick: () => startSubTest(sub, 'ping', false) },
+      { icon: 'refresh', label: 'Update subscription', sepBefore: true, onClick: () => onRefreshSubscription(sub.id) },
+      { icon: 'edit', label: 'Edit', sepBefore: true, onClick: () => setModal({ type: 'editSub', sub }) },
+      { icon: 'edit', label: 'Rename', onClick: () => setModal({ type: 'renameSub', sub }) },
+      { icon: 'copy', label: 'Copy link', onClick: () => copyText(sub.url, 'Subscription link copied') },
+      { icon: 'qrcode', label: 'Share via QR', onClick: () => setModal({ type: 'qr', value: sub.url, title: sub.name, subtitle: `${sub.configCount ?? 0} configs` }) },
+      { icon: 'info', label: 'View details', onClick: () => setModal({ type: 'details', sub }) },
+      { icon: 'trash', label: 'Delete', danger: true, sepBefore: true, onClick: () => requestDeleteSubscription(sub) },
     ];
     setCtxMenu({ x: e.clientX, y: e.clientY, title: sub.name, items });
   }, [onRefreshSubscription, requestDeleteSubscription, copyText, startSubTest]);
@@ -185,11 +185,11 @@ export default function ServerList({
         <div className="empty-glyph">
           <Icon name="signal" size={30} strokeWidth={2.25} />
         </div>
-        <h3>هنوز سروری وصل نکرده‌ای</h3>
-        <p>یک لینک کانفیگ یا آدرس ساب‌اسکریپشن اضافه کن تا اولین اتصالت رو بزنی.</p>
+        <h3>No servers yet</h3>
+        <p>Add a config link or a subscription address to make your first connection.</p>
         <button className="btn primary empty-cta" onClick={onAdd}>
           <Icon name="plus" size={15} />
-          افزودن کانفیگ
+          Add Config
         </button>
       </div>
     );
@@ -202,17 +202,17 @@ export default function ServerList({
           <Icon name="search" size={14} className="search-icon" />
           <input
             className="search-input"
-            placeholder="جست‌وجو…"
+            placeholder="Search…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
         </div>
         <select className="sort-select" value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
-          <option value="default">پیش‌فرض</option>
-          <option value="ping">پینگ</option>
-          <option value="name">نام</option>
+          <option value="default">Default</option>
+          <option value="ping">Ping</option>
+          <option value="name">Name</option>
         </select>
-        <button className="icon-btn" title="پینگ همه" onClick={() => onPingAll(filtered.map((p) => p.id))}>
+        <button className="icon-btn" title="Ping all" onClick={() => onPingAll(filtered.map((p) => p.id))}>
           <Icon name="refresh" size={15} />
         </button>
       </div>
@@ -220,7 +220,7 @@ export default function ServerList({
       {subscriptions.length > 0 && (
         <button className="update-all-btn" onClick={onUpdateAllSubscriptions} disabled={updatingSubs}>
           {updatingSubs && <span className="icon-spinner" aria-hidden="true" />}
-          {updatingSubs ? 'در حال به‌روزرسانی…' : 'به‌روزرسانی همه‌ی ساب‌اسکریپشن‌ها'}
+          {updatingSubs ? 'Updating…' : 'Update All Subscriptions'}
         </button>
       )}
 
@@ -244,7 +244,7 @@ export default function ServerList({
                       <Icon name="chevron" size={12} />
                     </span>
                     {group.local && <Icon name="folder" size={12} className="local-icon" />}
-                    <span className="group-name">{group.local ? 'لوکال' : group.sub.name}</span>
+                    <span className="group-name">{group.local ? 'Local' : group.sub.name}</span>
                     <span className="group-stats">
                       {group.stats.totalBytes > 0 && (
                         <span className="stat-chip size">{formatBytes(group.stats.totalBytes)}</span>
@@ -261,13 +261,13 @@ export default function ServerList({
                         className="group-action"
                         onClick={() => onRefreshSubscription(group.sub.id)}
                         disabled={refreshingSubIds?.has(group.sub.id)}
-                        title="به‌روزرسانی"
+                        title="Update"
                       >
                         {refreshingSubIds?.has(group.sub.id)
                           ? <span className="icon-spinner" aria-hidden="true" />
                           : <Icon name="refresh" size={13} />}
                       </button>
-                      <button className="group-action danger" onClick={() => requestDeleteSubscription(group.sub)} title="حذف ساب‌اسکریپشن">
+                      <button className="group-action danger" onClick={() => requestDeleteSubscription(group.sub)} title="Delete subscription">
                         <Icon name="close" size={13} />
                       </button>
                     </>
@@ -289,14 +289,14 @@ export default function ServerList({
                       </span>
                       {usageInfo.daysLeft !== null && (
                         <span className={`usage-expiry ${usageInfo.expired ? 'critical' : ''}`}>
-                          {usageInfo.expired ? 'منقضی شده' : `${usageInfo.daysLeft} روز تا انقضا`}
+                          {usageInfo.expired ? 'Expired' : `${usageInfo.daysLeft} days left`}
                         </span>
                       )}
                     </div>
                     {critical && (
                       <div className="usage-warn">
                         <Icon name="info" size={11} />
-                        {usageInfo.expired ? 'این ساب‌اسکریپشن منقضی شده است' : 'حجم این ساب‌اسکریپشن به پایان رسیده است'}
+                        {usageInfo.expired ? 'This subscription has expired' : 'This subscription has run out of data'}
                       </div>
                     )}
                   </div>
@@ -324,7 +324,7 @@ export default function ServerList({
 
       {modal?.type === 'renameProfile' && (
         <RenameModal
-          title="تغییر نام کانفیگ"
+          title="Rename Config"
           initialValue={modal.profile.name}
           onClose={() => setModal(null)}
           onSubmit={(name) => onRenameProfile(modal.profile.id, name)}
@@ -339,7 +339,7 @@ export default function ServerList({
       )}
       {modal?.type === 'renameSub' && (
         <RenameModal
-          title="تغییر نام ساب‌اسکریپشن"
+          title="Rename Subscription"
           initialValue={modal.sub.name}
           onClose={() => setModal(null)}
           onSubmit={(name) => onUpdateSubscription(modal.sub.id, { name })}
@@ -381,10 +381,10 @@ export default function ServerList({
 
       {confirmDelete && (
         <ConfirmModal
-          title={confirmDelete.type === 'subscription' ? 'حذف ساب‌اسکریپشن' : 'حذف کانفیگ'}
+          title={confirmDelete.type === 'subscription' ? 'Delete Subscription' : 'Delete Config'}
           message={
-            `آیا از حذف ${confirmDelete.label ? `"${confirmDelete.label}"` : 'این مورد'} مطمئن هستید؟ ` +
-            'این عملیات غیرقابل بازگشت است.'
+            `Are you sure you want to delete ${confirmDelete.label ? `"${confirmDelete.label}"` : 'this item'}? ` +
+            'This action cannot be undone.'
           }
           onClose={() => setConfirmDelete(null)}
           onConfirm={() => {

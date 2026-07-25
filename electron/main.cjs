@@ -4,8 +4,8 @@ const path = require('path');
 const fs = require('fs');
 
 const { parseLink, parseMany, newId, parseSubscriptionUserinfo, buildCustomProfile } = require('./lib/parsers.cjs');
-const { buildXrayConfig } = require('./lib/xrayConfig.cjs');
-const { XrayProcess } = require('./lib/xrayProcess.cjs');
+const { buildSingboxConfig } = require('./lib/singboxConfig.cjs');
+const { SingBoxProcess } = require('./lib/singboxProcess.cjs');
 const systemProxy = require('./lib/systemProxy.cjs');
 const killSwitch = require('./lib/killSwitch.cjs');
 const { tcpPing } = require('./lib/pingTest.cjs');
@@ -35,7 +35,7 @@ const DEFAULT_SETTINGS = {
   autoReconnect: true,
   killSwitchEnabled: false,
   subAutoUpdateInterval: 0, // ms; 0 = off
-  xrayLogLevel: 'warning',
+  singboxLogLevel: 'warn',
   socksPort: SOCKS_PORT, // preferred; auto-bumped to the next free port if taken
   httpPort: HTTP_PORT,
   socksHost: '127.0.0.1',
@@ -69,23 +69,27 @@ const store = new JsonStore(path.join(userDataDir, 'profiles.json'), {
   systemProxyEnabled: false, // app-owned live state, not a user preference -- set only by systemProxy:enable/disable and the disconnect safety net
 });
 
-const xrayBin = app.isPackaged
-  ? path.join(process.resourcesPath, 'bin', 'xray.exe')
-  : path.join(__dirname, '..', 'bin', 'xray.exe');
-const xrayWorkDir = path.join(userDataDir, 'xray-run');
+// sing-box ships one binary per OS -- 'sing-box.exe' on Windows, extensionless
+// 'sing-box' on macOS/Linux, namespaced by platform so a dev checkout can hold
+// binaries for more than one OS at once.
+const SINGBOX_BIN_NAME = process.platform === 'win32' ? 'sing-box.exe' : 'sing-box';
+const singboxBin = app.isPackaged
+  ? path.join(process.resourcesPath, 'bin', SINGBOX_BIN_NAME)
+  : path.join(__dirname, '..', 'bin', process.platform, SINGBOX_BIN_NAME);
+const singboxWorkDir = path.join(userDataDir, 'singbox-run');
 
-const xray = new XrayProcess(xrayBin, xrayWorkDir);
+const singbox = new SingBoxProcess(singboxBin, singboxWorkDir);
 
 // Local proxy log panel (Network settings): keep a capped ring buffer so a
 // freshly opened panel isn't empty, and forward each line live.
 const MAX_PROXY_LOGS = 300;
 let proxyLogRing = [];
-xray.on('log', (text) => {
+singbox.on('log', (text) => {
   const entry = { t: Date.now(), text: text.trim() };
   proxyLogRing.push(entry);
   if (proxyLogRing.length > MAX_PROXY_LOGS) proxyLogRing.splice(0, proxyLogRing.length - MAX_PROXY_LOGS);
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('proxy-log', entry);
-  if (process.env.SC_DEBUG) console.log('[xray]', entry.text);
+  if (process.env.SC_DEBUG) console.log('[singbox]', entry.text);
 });
 
 let mainWindow = null;
@@ -168,10 +172,10 @@ function sendState() {
 function updateTray() {
   if (!tray) return;
   const profile = findProfile(store.get('activeProfileId'));
-  const label = connectionState === 'connected' ? `وصل — ${profile ? profile.name : ''}`
-    : connectionState === 'connecting' ? 'در حال اتصال…'
-    : connectionState === 'disconnecting' ? 'در حال قطع…'
-    : 'قطع — Soul Connection';
+  const label = connectionState === 'connected' ? `Connected — ${profile ? profile.name : ''}`
+    : connectionState === 'connecting' ? 'Connecting…'
+    : connectionState === 'disconnecting' ? 'Disconnecting…'
+    : 'Disconnected — Soul Connection';
   tray.setToolTip(label.trim());
   tray.setContextMenu(buildTrayMenu());
 }
@@ -199,13 +203,13 @@ function buildTrayMenu() {
 
   return Menu.buildFromTemplate([
     {
-      label: profile ? `سرور: ${profile.name}` : 'کانفیگی انتخاب نشده',
+      label: profile ? `Server: ${profile.name}` : 'No config selected',
       enabled: false,
     },
-    { label: `حالت: ${mode === 'tun' ? 'تانل کامل' : 'پروکسی سیستم'}`, enabled: false },
+    { label: `Mode: ${mode === 'tun' ? 'Full Tunnel' : 'System Proxy'}`, enabled: false },
     { type: 'separator' },
     {
-      label: connected ? 'قطع اتصال' : 'اتصال',
+      label: connected ? 'Disconnect' : 'Connect',
       enabled: !busy && !!profile,
       click: () => {
         if (connected) serialize(disconnect).catch(() => {});
@@ -213,14 +217,14 @@ function buildTrayMenu() {
       },
     },
     {
-      label: 'انتخاب سریع سرور',
+      label: 'Quick Server Select',
       enabled: serverItems.length > 0,
-      submenu: serverItems.length ? serverItems : [{ label: 'کانفیگی وجود ندارد', enabled: false }],
+      submenu: serverItems.length ? serverItems : [{ label: 'No configs available', enabled: false }],
     },
     { type: 'separator' },
-    { label: 'باز کردن Soul Connection', click: () => mainWindow && mainWindow.show() },
+    { label: 'Open Soul Connection', click: () => mainWindow && mainWindow.show() },
     {
-      label: 'تنظیمات',
+      label: 'Settings',
       click: () => {
         if (!mainWindow) return;
         mainWindow.show();
@@ -228,7 +232,7 @@ function buildTrayMenu() {
       },
     },
     { type: 'separator' },
-    { label: 'خروج', click: () => { isQuitting = true; app.quit(); } },
+    { label: 'Quit', click: () => { isQuitting = true; app.quit(); } },
   ]);
 }
 
@@ -342,7 +346,7 @@ function createWindow() {
     const settings = getSettings();
     if (settings.startMinimized) {
       // Tray-enabled: stay fully hidden -- the tray icon's click handler
-      // (and its "باز کردن" menu item) already call mainWindow.show() to restore.
+      // (and its "Open" menu item) already call mainWindow.show() to restore.
       if (!settings.minimizeToTray) {
         mainWindow.show();
         mainWindow.minimize();
@@ -403,9 +407,12 @@ function findProfile(id) {
 
 async function connect(profileId) {
   const profile = findProfile(profileId);
-  if (!profile) throw new Error('کانفیگ پیدا نشد');
-  if (!fs.existsSync(xrayBin)) {
-    throw new Error('فایل xray.exe پیدا نشد. احتمالاً آنتی‌ویروس آن را حذف یا قرنطینه کرده. لطفاً پوشه‌ی برنامه را به لیست استثناهای آنتی‌ویروس اضافه کن و برنامه را دوباره نصب/اجرا کن.');
+  if (!profile) throw new Error('Config not found');
+  if (profile.protocol === 'mtproto') {
+    throw new Error('MTProto configs cannot be tunneled; use them directly in Telegram');
+  }
+  if (!fs.existsSync(singboxBin)) {
+    throw new Error('The connection core (sing-box) file was not found. Your antivirus may have removed or quarantined it. Please add the app folder to your antivirus exclusions and reinstall/relaunch the app.');
   }
   if (connectionState === 'connected' || connectionState === 'connecting') {
     await disconnect();
@@ -419,16 +426,16 @@ async function connect(profileId) {
     const preferredHttp = settings.httpPort === socksPort ? settings.httpPort + 1 : settings.httpPort;
     const httpPort = await findFreePort(preferredHttp);
     const apiPort = await findFreePort(API_PORT === socksPort || API_PORT === httpPort ? httpPort + 1 : API_PORT);
-    const config = buildXrayConfig(profile, {
-      socksPort, httpPort, apiPort, mode, logLevel: settings.xrayLogLevel,
+    const config = buildSingboxConfig(profile, {
+      socksPort, httpPort, apiPort, mode, logLevel: settings.singboxLogLevel,
       socksHost: settings.socksHost, httpHost: settings.httpHost,
       socksAccounts: settings.socksUsername ? [{ user: settings.socksUsername, pass: settings.socksPassword || '' }] : undefined,
       httpAccounts: settings.httpUsername ? [{ user: settings.httpUsername, pass: settings.httpPassword || '' }] : undefined,
     });
-    // Connecting only starts the local proxy (xray) -- System Proxy is a fully
-    // separate, user-controlled toggle (see systemProxy:enable/disable below)
-    // so flipping it on/off never restarts the tunnel.
-    await xray.start(config);
+    // Connecting only starts the local proxy (sing-box) -- System Proxy is a
+    // fully separate, user-controlled toggle (see systemProxy:enable/disable
+    // below) so flipping it on/off never restarts the tunnel.
+    await singbox.start(config);
     store.set('activeProfileId', profileId);
     store.set('activeMode', mode);
     {
@@ -442,7 +449,7 @@ async function connect(profileId) {
     reconnectAttempts = 0;
     connectionState = 'connected';
     sendState();
-    notify('Soul Connection', `به «${profile.name}» متصل شدی`);
+    notify('Soul Connection', `Connected to "${profile.name}"`);
     if (getSettings().killSwitchEnabled) {
       killSwitchArmed = true;
       await clearKillSwitchBlock();
@@ -453,10 +460,10 @@ async function connect(profileId) {
     connectedAt = null;
     sendState();
     if (mode === 'tun' && /access is denied/i.test(err.message || '')) {
-      throw new Error('حالت تانل نیاز به اجرای برنامه با دسترسی مدیر (Administrator) دارد');
+      throw new Error('Full Tunnel mode requires running the app with administrator/root access');
     }
     if (err.code === 'ENOENT') {
-      throw new Error('فایل xray.exe پیدا نشد. احتمالاً آنتی‌ویروس آن را حذف یا قرنطینه کرده. لطفاً پوشه‌ی برنامه را به لیست استثناهای آنتی‌ویروس اضافه کن و برنامه را دوباره نصب/اجرا کن.');
+      throw new Error('The connection core (sing-box) file was not found. Your antivirus may have removed or quarantined it. Please add the app folder to your antivirus exclusions and reinstall/relaunch the app.');
     }
     throw err;
   }
@@ -478,10 +485,15 @@ async function disableSystemProxySafetyNet() {
 async function applyKillSwitchBlock() {
   if (killSwitchBlocking) return;
   try {
-    await killSwitch.enable(xrayBin);
+    // Windows Firewall matches sing-box's own process directly and ignores
+    // this; macOS (pf) and Linux (nftables) have no per-process matching, so
+    // they instead allow-list the active profile's own remote endpoint.
+    const profile = findProfile(store.get('activeProfileId'));
+    const remote = profile ? { host: profile.address, port: profile.port } : null;
+    await killSwitch.enable(singboxBin, remote);
     killSwitchBlocking = true;
   } catch (err) {
-    notify('خطا در Kill Switch', 'مسدودسازی ترافیک ناموفق بود: ' + (err.message || ''));
+    notify('Kill Switch Error', 'Failed to block traffic: ' + (err.message || ''));
   }
   sendState();
 }
@@ -502,7 +514,7 @@ async function disconnect() {
   sendState();
   await disableSystemProxySafetyNet();
   expectedExit = true;
-  await xray.stop();
+  await singbox.stop();
   connectionState = 'disconnected';
   persistSessionTraffic();
   currentPorts = null;
@@ -517,7 +529,7 @@ async function disconnect() {
 
 // Detects the tunnel dropping on its own (crash, server-side kick, network
 // change) as opposed to a user-initiated disconnect, and tries to recover.
-xray.on('exit', async () => {
+singbox.on('exit', async () => {
   if (expectedExit) { expectedExit = false; return; }
   if (connectionState !== 'connected') return;
 
@@ -538,20 +550,20 @@ xray.on('exit', async () => {
 
   if (!getSettings().autoReconnect) {
     await disableSystemProxySafetyNet();
-    notify('اتصال قطع شد', 'تونل به‌طور غیرمنتظره قطع شد.');
+    notify('Disconnected', 'The tunnel dropped unexpectedly.');
     return;
   }
 
   const profileId = store.get('activeProfileId');
   if (!profileId || reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
     await disableSystemProxySafetyNet();
-    notify('اتصال قطع شد', 'تلاش برای اتصال مجدد ناموفق بود.');
+    notify('Disconnected', 'Reconnection attempts failed.');
     reconnectAttempts = 0;
     return;
   }
 
   reconnectAttempts++;
-  notify('اتصال قطع شد', `در حال تلاش برای اتصال مجدد (${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})…`);
+  notify('Disconnected', `Attempting to reconnect (${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})…`);
   await new Promise((r) => setTimeout(r, 2000 * reconnectAttempts));
   try {
     await serialize(() => connect(profileId));
@@ -563,7 +575,7 @@ xray.on('exit', async () => {
         await systemProxy.enable('127.0.0.1', currentPorts.httpPort, systemProxy.buildBypass(getSettings().customBypass));
       } catch { /* ignore */ }
     }
-  } catch { /* xray's own 'exit' event will fire again and retry, up to the cap */ }
+  } catch { /* singbox's own 'exit' event will fire again and retry, up to the cap */ }
 });
 
 app.whenReady().then(async () => {
@@ -579,7 +591,7 @@ app.whenReady().then(async () => {
     // UAC prompt was declined or failed -- fall back to proxy mode instead of
     // exiting with no window ever shown.
     store.set('connectionMode', 'proxy');
-    notify('دسترسی مدیر رد شد', 'حالت تانل نیاز به دسترسی مدیر دارد. برنامه در حالت پروکسی سیستم باز شد.');
+    notify('Administrator Access Denied', 'Full Tunnel mode requires administrator/root access. The app opened in System Proxy mode instead.');
   }
 
   createWindow();
@@ -670,14 +682,14 @@ ipcMain.handle('profiles:list', () => ({
 }));
 
 ipcMain.handle('settings:setMode', async (_e, mode) => {
-  if (mode !== 'proxy' && mode !== 'tun') throw new Error('حالت نامعتبر');
-  if (connectionState !== 'disconnected') throw new Error('اول باید قطع اتصال کنی');
+  if (mode !== 'proxy' && mode !== 'tun') throw new Error('Invalid mode');
+  if (connectionState !== 'disconnected') throw new Error('Disconnect first');
 
   if (mode === 'tun' && !(await isElevated())) {
-    notify('اجرای مجدد با دسترسی مدیر', 'حالت تانل نیاز به دسترسی مدیر دارد. برنامه به‌زودی دوباره باز می‌شود…');
+    notify('Relaunching with Administrator Access', 'Full Tunnel mode requires administrator/root access. The app will reopen shortly…');
     const relaunched = await relaunchElevated(app);
     if (!relaunched) {
-      throw new Error('برای فعال‌سازی حالت تانل باید درخواست دسترسی مدیر (UAC) رو تایید کنی');
+      throw new Error('You must approve the administrator/root access request to enable Full Tunnel mode');
     }
     return mode; // unreachable in practice -- app.exit() fires inside relaunchElevated
   }
@@ -688,7 +700,7 @@ ipcMain.handle('settings:setMode', async (_e, mode) => {
 
 ipcMain.handle('profiles:addLink', (_e, link) => {
   const profile = parseLink(link);
-  if (!profile) throw new Error('کانفیگ نامعتبر است یا پشتیبانی نمی‌شود');
+  if (!profile) throw new Error('Invalid or unsupported config');
   const profiles = store.get('profiles', []);
   profiles.push(profile);
   store.set('profiles', profiles);
@@ -723,13 +735,13 @@ ipcMain.handle('profiles:rename', (_e, { id, name }) => {
 
 ipcMain.handle('profiles:update', (_e, { id, link }) => {
   const parsed = parseLink(link);
-  if (!parsed) throw new Error('کانفیگ نامعتبر است یا پشتیبانی نمی‌شود');
+  if (!parsed) throw new Error('Invalid or unsupported config');
   if (id === store.get('activeProfileId') && connectionState !== 'disconnected') {
-    throw new Error('اول باید قطع اتصال کنی');
+    throw new Error('Disconnect first');
   }
   const profiles = store.get('profiles', []);
   const existing = profiles.find((p) => p.id === id);
-  if (!existing) throw new Error('کانفیگ پیدا نشد');
+  if (!existing) throw new Error('Config not found');
   Object.assign(existing, parsed, {
     id: existing.id,
     subId: existing.subId,
@@ -745,7 +757,7 @@ ipcMain.handle('profiles:update', (_e, { id, link }) => {
 ipcMain.handle('subscriptions:add', async (_e, url) => {
   const { text, headers } = await fetchText(url);
   const parsed = parseMany(text);
-  if (!parsed.length) throw new Error('هیچ کانفیگی در این ساب‌اسکریپشن پیدا نشد');
+  if (!parsed.length) throw new Error('No configs found in this subscription');
   const usage = parseSubscriptionUserinfo(headers['subscription-userinfo']);
   const sub = { id: newId(), url, name: url, createdAt: Date.now(), lastUpdated: Date.now(), configCount: parsed.length, usage };
   parsed.forEach((p) => { p.subId = sub.id; });
@@ -762,7 +774,7 @@ ipcMain.handle('subscriptions:add', async (_e, url) => {
 async function refreshSubscription(subId) {
   const subs = store.get('subscriptions', []);
   const sub = subs.find((s) => s.id === subId);
-  if (!sub) throw new Error('ساب‌اسکریپشن پیدا نشد');
+  if (!sub) throw new Error('Subscription not found');
   const { text, headers } = await fetchText(sub.url);
   const parsed = parseMany(text);
   parsed.forEach((p) => { p.subId = subId; });
@@ -803,7 +815,7 @@ function scheduleSubAutoUpdate() {
   subAutoUpdateTimer = setInterval(async () => {
     const results = await refreshAllSubscriptions();
     if (results.length) {
-      notify('ساب‌اسکریپشن‌ها به‌روزرسانی شدند', `${results.length} ساب‌اسکریپشن بررسی شد`);
+      notify('Subscriptions Updated', `${results.length} subscriptions checked`);
       if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('profiles-changed');
     }
   }, interval);
@@ -830,7 +842,7 @@ ipcMain.handle('subscriptions:delete', async (_e, subId) => {
 ipcMain.handle('subscriptions:update', (_e, { id, name, url }) => {
   const subs = store.get('subscriptions', []);
   const sub = subs.find((s) => s.id === id);
-  if (!sub) throw new Error('ساب‌اسکریپشن پیدا نشد');
+  if (!sub) throw new Error('Subscription not found');
   if (name !== undefined) sub.name = name;
   if (url !== undefined) sub.url = url;
   store.set('subscriptions', subs);
@@ -855,7 +867,7 @@ ipcMain.handle('connection:status', () => ({
 
 ipcMain.handle('ping:test', async (_e, profileId) => {
   const profile = findProfile(profileId);
-  if (!profile) throw new Error('کانفیگ پیدا نشد');
+  if (!profile) throw new Error('Config not found');
   const ms = await tcpPing(profile.address, profile.port, 5000);
   return { profileId, ms };
 });
@@ -870,7 +882,15 @@ function emitTestEvent(token, type, data) {
 
 function requireProfile(profileId) {
   const profile = findProfile(profileId);
-  if (!profile) throw new Error('کانفیگ پیدا نشد');
+  if (!profile) throw new Error('Config not found');
+  return profile;
+}
+
+function requireTunnelableProfile(profileId) {
+  const profile = requireProfile(profileId);
+  if (profile.protocol === 'mtproto') {
+    throw new Error('MTProto configs cannot be tunneled');
+  }
   return profile;
 }
 
@@ -888,11 +908,11 @@ ipcMain.handle('test:ping', async (_e, { profileId, token }) => {
 });
 
 ipcMain.handle('test:real', async (_e, { profileId, token }) => {
-  const profile = requireProfile(profileId);
+  const profile = requireTunnelableProfile(profileId);
   const signal = serverTest.begin(token);
   try {
     return await serverTest.realPing(profile, {
-      xrayBin, workRoot: xrayWorkDir, signal,
+      singboxBin, workRoot: singboxWorkDir, signal,
       emit: (type, data) => emitTestEvent(token, type, data),
     });
   } finally {
@@ -901,11 +921,11 @@ ipcMain.handle('test:real', async (_e, { profileId, token }) => {
 });
 
 ipcMain.handle('test:speed', async (_e, { profileId, token }) => {
-  const profile = requireProfile(profileId);
+  const profile = requireTunnelableProfile(profileId);
   const signal = serverTest.begin(token);
   try {
     return await serverTest.speedTest(profile, {
-      xrayBin, workRoot: xrayWorkDir, signal,
+      singboxBin, workRoot: singboxWorkDir, signal,
       emit: (type, data) => emitTestEvent(token, type, data),
     });
   } finally {
@@ -931,7 +951,7 @@ ipcMain.handle('subscriptions:refreshAll', async () => {
 
 ipcMain.handle('settings:get', () => getSettings());
 
-const LOG_LEVELS = new Set(['none', 'error', 'warning', 'info', 'debug']);
+const LOG_LEVELS = new Set(['none', 'error', 'warn', 'info', 'debug']);
 const BOOLEAN_SETTINGS = new Set([
   'launchOnStartup', 'runLocalProxyOnStartup', 'startMinimized', 'restorePreviousSession',
   'minimizeToTray', 'autoReconnect', 'killSwitchEnabled',
@@ -961,7 +981,7 @@ ipcMain.handle('settings:update', async (_e, patch) => {
       if (typeof value !== 'boolean') continue;
     } else if (key === 'subAutoUpdateInterval') {
       if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) continue;
-    } else if (key === 'xrayLogLevel') {
+    } else if (key === 'singboxLogLevel') {
       if (!LOG_LEVELS.has(value)) continue;
     } else if (PORT_SETTINGS.has(key)) {
       if (!isValidPort(value)) continue;
@@ -978,17 +998,17 @@ ipcMain.handle('settings:update', async (_e, patch) => {
   if ('socksPort' in clean || 'httpPort' in clean) {
     const prospective = { ...getSettings(), ...clean };
     if (prospective.socksPort === prospective.httpPort) {
-      throw new Error('پورت SOCKS و HTTP باید متفاوت باشند');
+      throw new Error('SOCKS and HTTP ports must be different');
     }
   }
 
   if ('killSwitchEnabled' in clean) {
     if (clean.killSwitchEnabled) {
       if (!(await isElevated())) {
-        notify('اجرای مجدد با دسترسی مدیر', 'Kill Switch نیاز به دسترسی مدیر دارد. برنامه به‌زودی دوباره باز می‌شود…');
+        notify('Relaunching with Administrator Access', 'Kill Switch requires administrator/root access. The app will reopen shortly…');
         const relaunched = await relaunchElevated(app);
         if (!relaunched) {
-          throw new Error('برای فعال‌سازی Kill Switch باید درخواست دسترسی مدیر (UAC) رو تایید کنی');
+          throw new Error('You must approve the administrator/root access request to enable Kill Switch');
         }
         return; // unreachable in practice -- app.exit() fires inside relaunchElevated
       }
@@ -1016,19 +1036,19 @@ ipcMain.handle('settings:update', async (_e, patch) => {
 });
 
 ipcMain.handle('app:openLogsFolder', () => {
-  shell.openPath(xrayWorkDir);
+  shell.openPath(singboxWorkDir);
 });
 
 ipcMain.handle('app:openProxyFolder', () => {
-  shell.openPath(xrayWorkDir);
+  shell.openPath(singboxWorkDir);
 });
 
 // System Proxy is fully decoupled from the tunnel: enabling it only points
 // Windows at the already-running local proxy, disabling it only resets the
-// registry -- neither one starts/stops xray.
+// registry -- neither one starts/stops sing-box.
 ipcMain.handle('systemProxy:enable', async () => {
   if (connectionState !== 'connected' || !currentPorts) {
-    throw new Error('اول باید پروکسی محلی را روشن کنی (به یک سرور وصل شو)');
+    throw new Error('Turn on the local proxy first (connect to a server)');
   }
   const settings = getSettings();
   await systemProxy.enable('127.0.0.1', currentPorts.httpPort, systemProxy.buildBypass(settings.customBypass));
@@ -1046,7 +1066,7 @@ ipcMain.handle('systemProxy:disable', async () => {
 
 ipcMain.handle('network:testConnection', async (_e, { protocol }) => {
   if (connectionState !== 'connected' || !currentPorts) {
-    return { ok: false, reason: 'not-running', message: 'پروکسی محلی در حال اجرا نیست' };
+    return { ok: false, reason: 'not-running', message: 'The local proxy is not running' };
   }
   const settings = getSettings();
   const isSocks = protocol === 'socks';
@@ -1063,7 +1083,7 @@ ipcMain.handle('network:getRecentLogs', () => proxyLogRing);
 
 const NETWORK_RESET_KEYS = ['socksHost', 'socksPort', 'socksUsername', 'socksPassword', 'httpHost', 'httpPort', 'httpUsername', 'httpPassword', 'customBypass'];
 ipcMain.handle('network:resetDefaults', () => {
-  if (connectionState !== 'disconnected') throw new Error('اول باید قطع اتصال کنی');
+  if (connectionState !== 'disconnected') throw new Error('Disconnect first');
   const patch = {};
   for (const key of NETWORK_RESET_KEYS) patch[key] = DEFAULT_SETTINGS[key];
   return updateSettings(patch);
@@ -1094,7 +1114,7 @@ ipcMain.handle('profiles:resetAllUsage', () => {
 
 ipcMain.handle('app:exportBackup', async () => {
   const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
-    title: 'پشتیبان‌گیری از کانفیگ‌ها',
+    title: 'Back Up Configs',
     defaultPath: `soul-connection-backup-${new Date().toISOString().slice(0, 10)}.json`,
     filters: [{ name: 'JSON', extensions: ['json'] }],
   });
@@ -1113,7 +1133,7 @@ ipcMain.handle('app:exportBackup', async () => {
 
 ipcMain.handle('app:saveImage', async (_e, { dataUrl, defaultName }) => {
   const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
-    title: 'ذخیره‌ی تصویر QR',
+    title: 'Save QR Image',
     defaultPath: defaultName || 'qrcode.png',
     filters: [{ name: 'PNG Image', extensions: ['png'] }],
   });
@@ -1130,10 +1150,10 @@ ipcMain.handle('app:copyImage', (_e, dataUrl) => {
 });
 
 ipcMain.handle('app:importBackup', async () => {
-  if (connectionState !== 'disconnected') throw new Error('اول باید قطع اتصال کنی');
+  if (connectionState !== 'disconnected') throw new Error('Disconnect first');
 
   const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow, {
-    title: 'بازیابی کانفیگ‌ها',
+    title: 'Restore Configs',
     filters: [{ name: 'JSON', extensions: ['json'] }],
     properties: ['openFile'],
   });
@@ -1143,9 +1163,9 @@ ipcMain.handle('app:importBackup', async () => {
   try {
     data = JSON.parse(fs.readFileSync(filePaths[0], 'utf8'));
   } catch {
-    throw new Error('فایل پشتیبان معتبر نیست');
+    throw new Error('Invalid backup file');
   }
-  if (!Array.isArray(data.profiles)) throw new Error('فایل پشتیبان معتبر نیست');
+  if (!Array.isArray(data.profiles)) throw new Error('Invalid backup file');
 
   store.set('profiles', data.profiles);
   store.set('subscriptions', Array.isArray(data.subscriptions) ? data.subscriptions : []);
