@@ -9,7 +9,7 @@ on:
 env:
   # Pinned so all three platforms build against the exact same sing-box
   # release this app's config/process code was written and tested against
-  # (electron/lib/singboxConfig.cjs, electron/lib/singboxProcess.cjs).
+  # (packages/core-logic/singboxConfig.js, packages/desktop/electron/lib/singboxProcess.cjs).
   # sing-box's config schema is version-sensitive -- bump deliberately.
   SINGBOX_VERSION: v1.13.14
 
@@ -51,12 +51,12 @@ jobs:
           set -e
           go install -tags "with_quic,with_grpc,with_utls,with_clash_api,with_v2ray_api" \
             "github.com/sagernet/sing-box/cmd/sing-box@${SINGBOX_VERSION}"
-          mkdir -p "bin/${{ matrix.platform }}"
+          mkdir -p "packages/desktop/bin/${{ matrix.platform }}"
           if [ "${{ matrix.platform }}" = "win32" ]; then
-            cp "$(go env GOPATH)/bin/sing-box.exe" "bin/win32/sing-box.exe"
+            cp "$(go env GOPATH)/bin/sing-box.exe" "packages/desktop/bin/win32/sing-box.exe"
           else
-            cp "$(go env GOPATH)/bin/sing-box" "bin/${{ matrix.platform }}/sing-box"
-            chmod +x "bin/${{ matrix.platform }}/sing-box"
+            cp "$(go env GOPATH)/bin/sing-box" "packages/desktop/bin/${{ matrix.platform }}/sing-box"
+            chmod +x "packages/desktop/bin/${{ matrix.platform }}/sing-box"
           fi
 
       - name: Install dependencies
@@ -68,5 +68,5 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: soul-connection-${{ matrix.platform }}
-          path: release/**
+          path: packages/desktop/release/**
           if-no-files-found: warn

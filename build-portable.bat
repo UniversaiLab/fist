@@ -38,7 +38,7 @@ echo.
 
 echo [2/3] Building the portable executable ^(this can take a few minutes^)...
 echo.
-call node scripts\build-exe.cjs --portable
+call node packages\desktop\scripts\build-exe.cjs --portable
 if errorlevel 1 (
     echo.
     echo [ERROR] The build process failed. See the output above for details.
@@ -48,7 +48,7 @@ echo.
 
 echo [3/3] Locating the output EXE in the release folder...
 set "EXE_PATH="
-for %%F in ("release\*Portable*.exe") do set "EXE_PATH=%%~fF"
+for %%F in ("packages\desktop\release\*Portable*.exe") do set "EXE_PATH=%%~fF"
 
 if not defined EXE_PATH (
     echo.
