@@ -21,6 +21,7 @@ function ConnectHero({ connectionState, connectionMode, activeProfile, onToggle,
 
   return (
     <section className={`stage ${connectionState}`}>
+      <div className="stage-glow" aria-hidden="true" />
       <div className="stage-dots" aria-hidden="true" />
 
       <div className={`ring-wrap ${connectionState}`}>
@@ -36,7 +37,7 @@ function ConnectHero({ connectionState, connectionMode, activeProfile, onToggle,
             ? { duration: 0.7, repeat: Infinity, ease: 'easeInOut' }
             : { type: 'spring', stiffness: 320, damping: 22 }}
         >
-          <img className="fist-mark" src="./logo.png" alt="" />
+          <span className="fist-mark" aria-hidden="true" />
           <AnimatePresence mode="wait">
             <motion.span
               key={connectionState}

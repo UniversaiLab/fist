@@ -730,8 +730,7 @@ button:disabled { cursor: default; }
   overflow: hidden;
 }
 
-/* Flat dotted backdrop instead of a glowing gradient -- a plain, textural
-   field behind the connect button. */
+/* Flat dotted backdrop -- a plain, textural field behind the connect button. */
 .stage-dots {
   position: absolute;
   inset: 0;
@@ -740,6 +739,26 @@ button:disabled { cursor: default; }
   background-size: 22px 22px;
   -webkit-mask-image: radial-gradient(circle at 50% 46%, #000 0%, transparent 72%);
   mask-image: radial-gradient(circle at 50% 46%, #000 0%, transparent 72%);
+}
+
+/* Connected: the dotted backdrop's tint drifts through an animated green
+   gradient instead of a static "Connected" glow. */
+.stage-glow {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.8s ease;
+  background: radial-gradient(60% 55% at 30% 30%, rgba(34, 197, 94, 0.32), transparent 65%),
+              radial-gradient(55% 50% at 72% 68%, rgba(22, 163, 74, 0.24), transparent 65%);
+  background-size: 180% 180%, 180% 180%;
+  animation: stage-glow-drift 9s ease-in-out infinite;
+}
+.stage.connected .stage-glow { opacity: 1; }
+
+@keyframes stage-glow-drift {
+  0%, 100% { background-position: 20% 20%, 80% 80%; }
+  50% { background-position: 65% 60%, 30% 35%; }
 }
 
 /* ---- The connect ring ---- */
@@ -770,9 +789,9 @@ button:disabled { cursor: default; }
   50% { transform: scale(1.05); opacity: 1; }
 }
 
-/* Flat solid white button -- no borders, no glass blur. The mark sits
-   directly on it since the button itself already supplies the light
-   surface the black artwork needs. */
+/* Flat neutral button -- no white plate behind the mark. The fist itself
+   is recolored via a CSS mask (same artwork, no backing shape needed) so
+   it reads directly against the dark button, and follows connection state. */
 .connect-btn {
   position: relative;
   width: 152px;
@@ -783,23 +802,39 @@ button:disabled { cursor: default; }
   align-items: center;
   justify-content: center;
   gap: 8px;
-  background: #ffffff;
+  background: var(--card);
+  color: var(--text);
   box-shadow: 0 20px 40px -18px rgba(0, 0, 0, 0.75);
+  transition: color 0.3s ease;
 }
-.connect-btn:disabled { opacity: 0.85; }
+.connect-btn:disabled { opacity: 0.9; }
+
+.ring-wrap.connecting .connect-btn,
+.ring-wrap.disconnecting .connect-btn { color: var(--warn); }
+.ring-wrap.connected .connect-btn { color: var(--signal); }
 
 .fist-mark {
   width: 62px;
-  height: auto;
+  height: 78px;
   display: block;
   pointer-events: none;
+  background-color: currentColor;
+  -webkit-mask-image: url(../logo.png);
+  -webkit-mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-image: url(../logo.png);
+  mask-size: contain;
+  mask-repeat: no-repeat;
+  mask-position: center;
+  transition: background-color 0.3s ease;
 }
 
 .connect-btn .label {
   font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.2px;
-  color: #000000;
+  color: var(--text);
 }
 
 /* ---- Stage captions ---- */
