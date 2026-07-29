@@ -150,9 +150,8 @@ button:disabled { cursor: default; }
   letter-spacing: 0.4px;
 }
 .titlebar-brand img {
-  width: 16px;
-  height: 16px;
-  border-radius: 4px;
+  width: 14px;
+  height: 18px;
   object-fit: contain;
 }
 .titlebar-brand-sub {
@@ -180,9 +179,8 @@ button:disabled { cursor: default; }
 }
 
 .sidebar-head .mark {
-  width: 26px;
-  height: 26px;
-  border-radius: 8px;
+  width: 24px;
+  height: 30px;
   flex-shrink: 0;
   object-fit: contain;
 }
@@ -735,7 +733,9 @@ button:disabled { cursor: default; }
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background-image: radial-gradient(rgba(255, 255, 255, 0.12) 1px, transparent 1px);
+  /* subtle red tint rather than plain white -- the idle backdrop's resting
+     identity is black + a hint of red, echoing the brand mark. */
+  background-image: radial-gradient(rgba(255, 110, 110, 0.1) 1px, transparent 1px);
   background-size: 22px 22px;
   -webkit-mask-image: radial-gradient(circle at 50% 46%, #000 0%, transparent 72%);
   mask-image: radial-gradient(circle at 50% 46%, #000 0%, transparent 72%);
@@ -761,6 +761,27 @@ button:disabled { cursor: default; }
   50% { background-position: 65% 60%, 30% 35%; }
 }
 
+/* Connecting/disconnecting: scattered dots across the backdrop randomly
+   pulse green, standing in for a spinner on the logo itself. */
+.stage-pulse-dots {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.pulse-dot {
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--signal);
+  opacity: 0;
+  animation: pulse-dot-flash 1.6s ease-in-out infinite;
+}
+@keyframes pulse-dot-flash {
+  0%, 100% { opacity: 0; transform: scale(0.6); box-shadow: none; }
+  40% { opacity: 0.9; transform: scale(1.4); box-shadow: 0 0 7px var(--signal); }
+}
+
 /* ---- The connect ring ---- */
 .ring-wrap {
   position: relative;
@@ -772,62 +793,45 @@ button:disabled { cursor: default; }
   flex-shrink: 0;
 }
 
-/* Soft blurred glow, not a hard-edged ring -- color follows connection state. */
+/* Soft blurred glow, not a hard-edged ring. Only meaningful once connected --
+   connecting/disconnecting communicate via the pulsing background dots
+   instead, so the halo stays off during those states. */
 .ring-halo {
   position: absolute;
   inset: 10px;
   border-radius: 50%;
-  background: radial-gradient(circle, var(--halo, rgba(255, 255, 255, 0.08)) 0%, transparent 68%);
-  transition: background 0.4s ease;
+  background: radial-gradient(circle, var(--halo, rgba(255, 255, 255, 0.06)) 0%, transparent 68%);
+  opacity: 1;
+  transition: opacity 0.3s ease, background 0.4s ease;
   animation: halo-breathe 4.5s ease-in-out infinite;
 }
 .ring-wrap.connected .ring-halo { --halo: rgba(34, 197, 94, 0.32); animation-duration: 3.2s; }
-.ring-wrap.connecting .ring-halo, .ring-wrap.disconnecting .ring-halo { --halo: rgba(240, 182, 74, 0.22); animation-duration: 1.4s; }
+.ring-wrap.connecting .ring-halo, .ring-wrap.disconnecting .ring-halo { opacity: 0; }
 
 @keyframes halo-breathe {
   0%, 100% { transform: scale(0.94); opacity: 0.7; }
   50% { transform: scale(1.05); opacity: 1; }
 }
 
-/* Flat neutral button -- no white plate behind the mark. The fist itself
-   is recolored via a CSS mask (same artwork, no backing shape needed) so
-   it reads directly against the dark button, and follows connection state. */
+/* No plate, no circle -- just the mark, used exactly as supplied, floating
+   directly on the stage. The button is an invisible hit area around it. */
 .connect-btn {
   position: relative;
-  width: 152px;
-  height: 152px;
-  border-radius: 50%;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  background: var(--card);
-  color: var(--text);
-  box-shadow: 0 20px 40px -18px rgba(0, 0, 0, 0.75);
-  transition: color 0.3s ease;
+  gap: 10px;
+  padding: 12px;
+  background: none;
 }
 .connect-btn:disabled { opacity: 0.9; }
 
-.ring-wrap.connecting .connect-btn,
-.ring-wrap.disconnecting .connect-btn { color: var(--warn); }
-.ring-wrap.connected .connect-btn { color: var(--signal); }
-
 .fist-mark {
-  width: 62px;
-  height: 78px;
+  width: 128px;
+  height: auto;
   display: block;
   pointer-events: none;
-  background-color: currentColor;
-  -webkit-mask-image: url(../logo.png);
-  -webkit-mask-size: contain;
-  -webkit-mask-repeat: no-repeat;
-  -webkit-mask-position: center;
-  mask-image: url(../logo.png);
-  mask-size: contain;
-  mask-repeat: no-repeat;
-  mask-position: center;
-  transition: background-color 0.3s ease;
 }
 
 .connect-btn .label {

@@ -18,7 +18,7 @@ function TitleBar({ maximized, onMinimize, onToggleMaximize, onClose }) {
   return (
     <div className="titlebar">
       <div className="titlebar-brand">
-        <img src="./icon.png" alt="" />
+        <img src="./logo.png" alt="" />
         <span>FIST</span>
         <span className="titlebar-brand-sub">1819</span>
       </div>
@@ -493,7 +493,7 @@ export default function App() {
       <div className="workspace">
         <aside className="sidebar">
           <header className="sidebar-head">
-            <img className="mark" src="./icon.png" alt="" />
+            <img className="mark" src="./logo.png" alt="" />
             <div className="brand">
               <span className="brand-name">FIST<em className="brand-tag">1819</em></span>
               <span className="brand-sub">
