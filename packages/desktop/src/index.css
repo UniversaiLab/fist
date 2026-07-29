@@ -4,19 +4,20 @@
   --bg-panel: #0a0a0a;
   --card: #1a1a1a;
   --card-hover: #242424;
-  --border: #2e2e2e;
+  --border: rgba(255, 255, 255, 0.07);
   --hairline: rgba(255, 255, 255, 0.08);
   --text: #ffffff;
   --text-dim: #b3b3b3;
   --text-faint: #7a7a7a;
 
-  --signal: #ff0000;      /* connected / brand red */
-  --signal-dim: #b30000;
-  --signal-tint: rgba(255, 0, 0, 0.12);
+  --signal: #22c55e;      /* connected / positive -- green */
+  --signal-dim: #16a34a;
+  --signal-tint: rgba(34, 197, 94, 0.14);
   --idle: #8a8a8a;        /* disconnected, neutral grey */
   --idle-dim: #5c5c5c;
   --warn: #f0b64a;
-  --danger: #ff3b30;      /* errors -- a warmer red, distinct from brand signal red */
+  --danger: #ff3b30;      /* errors -- warm red */
+  --brand-red: #ff0000;   /* reserved for the FIST/1819 brand mark only */
 
   --radius-lg: 18px;
   --radius-md: 12px;
@@ -155,7 +156,7 @@ button:disabled { cursor: default; }
   object-fit: contain;
 }
 .titlebar-brand-sub {
-  color: var(--signal);
+  color: var(--brand-red);
   font-weight: 800;
 }
 
@@ -208,7 +209,7 @@ button:disabled { cursor: default; }
   font-style: normal;
   font-weight: 800;
   font-size: 10.5px;
-  color: var(--signal);
+  color: var(--brand-red);
   letter-spacing: 0.2px;
 }
 
@@ -524,21 +525,27 @@ button:disabled { cursor: default; }
 
 .server-card {
   position: relative;
-  border: 1px solid transparent;
+  border: none;
   border-radius: var(--radius-md);
   padding: 8px 10px;
   display: flex;
   align-items: center;
   gap: 9px;
-  transition: background 0.15s, border-color 0.15s;
+  transition: background 0.15s, color 0.15s;
 }
 .server-card:hover { background: var(--card-hover); }
 
+/* Selected profile: flat solid white card, black text -- matches the
+   app's "white surface, black content" treatment for anything raised
+   above the black background, rather than a colored border/tint. */
 .server-card.active {
-  background: linear-gradient(180deg, rgba(255, 0, 0, 0.09), rgba(255, 0, 0, 0.03));
-  border-color: rgba(255, 0, 0, 0.22);
+  background: #ffffff;
 }
-.server-card.active .name { color: var(--signal); }
+.server-card.active .name { color: #000000; }
+.server-card.active .addr { color: rgba(0, 0, 0, 0.55); }
+.server-card.active .usage-tag { color: rgba(0, 0, 0, 0.55); }
+.server-card.active .del { color: rgba(0, 0, 0, 0.55); }
+.server-card.active .del:hover { color: var(--danger); background: rgba(0, 0, 0, 0.08); }
 
 .server-card .proto-tag {
   font-family: 'Consolas', monospace;
@@ -552,7 +559,20 @@ button:disabled { cursor: default; }
   border-radius: 5px;
   flex-shrink: 0;
 }
-.server-card.active .proto-tag { color: var(--signal); background: var(--signal-tint); }
+.server-card.active .proto-tag { color: #000000; background: rgba(0, 0, 0, 0.08); }
+
+/* Actually connected (not just selected): a small green dot before the name. */
+.connected-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--signal);
+  margin-inline-end: 6px;
+  box-shadow: 0 0 6px var(--signal);
+  flex-shrink: 0;
+  vertical-align: middle;
+}
 
 .server-card .info {
   flex: 1;
@@ -628,7 +648,7 @@ button:disabled { cursor: default; }
   align-items: center;
   justify-content: center;
   color: var(--signal);
-  background: radial-gradient(circle at 35% 30%, rgba(255, 0, 0, 0.16), rgba(255, 0, 0, 0.03) 70%);
+  background: radial-gradient(circle at 35% 30%, rgba(34, 197, 94, 0.16), rgba(34, 197, 94, 0.03) 70%);
   box-shadow: 0 0 0 1px var(--border);
   margin-bottom: 6px;
   animation: empty-glyph-in 0.5s ease-out;
@@ -710,42 +730,19 @@ button:disabled { cursor: default; }
   overflow: hidden;
 }
 
-/* Ambient auroras: neutral grey when idle, brand red when live. State
-   crossfades them so the whole room changes temperature, not just the button. */
-.aurora {
+/* Flat dotted backdrop instead of a glowing gradient -- a plain, textural
+   field behind the connect button. */
+.stage-dots {
   position: absolute;
-  inset: -20%;
+  inset: 0;
   pointer-events: none;
-  transition: opacity 1.4s ease;
-  animation: aurora-drift 26s ease-in-out infinite alternate;
-  will-change: transform, opacity;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.12) 1px, transparent 1px);
+  background-size: 22px 22px;
+  -webkit-mask-image: radial-gradient(circle at 50% 46%, #000 0%, transparent 72%);
+  mask-image: radial-gradient(circle at 50% 46%, #000 0%, transparent 72%);
 }
 
-.aurora-idle {
-  background:
-    radial-gradient(34% 28% at 32% 30%, rgba(138, 138, 138, 0.1), transparent 70%),
-    radial-gradient(30% 26% at 70% 72%, rgba(92, 92, 92, 0.08), transparent 70%);
-  opacity: 1;
-}
-
-.aurora-live {
-  background:
-    radial-gradient(36% 30% at 34% 30%, rgba(255, 0, 0, 0.16), transparent 70%),
-    radial-gradient(30% 26% at 70% 72%, rgba(179, 0, 0, 0.12), transparent 70%);
-  opacity: 0;
-}
-
-.stage.connected .aurora-idle { opacity: 0; }
-.stage.connected .aurora-live { opacity: 1; }
-.stage.connecting .aurora-idle { opacity: 0.4; }
-.stage.connecting .aurora-live { opacity: 0.35; }
-
-@keyframes aurora-drift {
-  from { transform: translate3d(-2%, -1.5%, 0) scale(1); }
-  to { transform: translate3d(2%, 2%, 0) scale(1.06); }
-}
-
-/* ---- The soul ring ---- */
+/* ---- The connect ring ---- */
 .ring-wrap {
   position: relative;
   width: 236px;
@@ -756,69 +753,26 @@ button:disabled { cursor: default; }
   flex-shrink: 0;
 }
 
+/* Soft blurred glow, not a hard-edged ring -- color follows connection state. */
 .ring-halo {
   position: absolute;
   inset: 10px;
   border-radius: 50%;
-  background: radial-gradient(circle, var(--halo, rgba(138, 138, 138, 0.16)) 0%, transparent 68%);
+  background: radial-gradient(circle, var(--halo, rgba(255, 255, 255, 0.08)) 0%, transparent 68%);
+  transition: background 0.4s ease;
   animation: halo-breathe 4.5s ease-in-out infinite;
 }
-.ring-wrap.connected .ring-halo { --halo: rgba(255, 0, 0, 0.2); animation-duration: 3.2s; }
-.ring-wrap.connecting .ring-halo, .ring-wrap.disconnecting .ring-halo { --halo: rgba(240, 182, 74, 0.14); animation-duration: 1.8s; }
+.ring-wrap.connected .ring-halo { --halo: rgba(34, 197, 94, 0.32); animation-duration: 3.2s; }
+.ring-wrap.connecting .ring-halo, .ring-wrap.disconnecting .ring-halo { --halo: rgba(240, 182, 74, 0.22); animation-duration: 1.4s; }
 
 @keyframes halo-breathe {
   0%, 100% { transform: scale(0.94); opacity: 0.7; }
   50% { transform: scale(1.05); opacity: 1; }
 }
 
-.ring-svg {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  transform: rotate(-90deg);
-}
-
-.ring-svg circle {
-  fill: none;
-  stroke-width: 2.5;
-  stroke-linecap: round;
-}
-
-.ring-track { stroke: var(--border); }
-
-/* Spinner arc: only alive while a transition is in flight. */
-.ring-spin {
-  stroke: var(--warn);
-  stroke-dasharray: 60 493;
-  opacity: 0;
-  transform-origin: center;
-}
-.ring-wrap.connecting .ring-spin,
-.ring-wrap.disconnecting .ring-spin {
-  opacity: 1;
-  animation: ring-spin 1.3s linear infinite;
-}
-.ring-wrap.disconnecting .ring-spin { stroke: var(--idle); }
-
-@keyframes ring-spin {
-  to { transform: rotate(360deg); }
-}
-
-/* Progress arc: sweeps closed the moment the tunnel opens. */
-.ring-arc {
-  stroke: var(--signal);
-  stroke-dasharray: 553;
-  stroke-dashoffset: 553;
-  transition: stroke-dashoffset 0.9s cubic-bezier(0.3, 0, 0.2, 1), opacity 0.4s;
-  opacity: 0;
-}
-.ring-wrap.connected .ring-arc {
-  stroke-dashoffset: 0;
-  opacity: 1;
-  filter: drop-shadow(0 0 7px rgba(255, 0, 0, 0.55));
-}
-
+/* Flat solid white button -- no borders, no glass blur. The mark sits
+   directly on it since the button itself already supplies the light
+   surface the black artwork needs. */
 .connect-btn {
   position: relative;
   width: 152px;
@@ -829,72 +783,23 @@ button:disabled { cursor: default; }
   align-items: center;
   justify-content: center;
   gap: 8px;
-  color: var(--idle);
-  background: radial-gradient(circle at 36% 30%, rgba(40, 40, 40, 0.55), rgba(10, 10, 10, 0.55) 72%);
-  backdrop-filter: blur(18px) saturate(150%);
-  -webkit-backdrop-filter: blur(18px) saturate(150%);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 0 0 1px var(--border), 0 24px 48px -20px rgba(0, 0, 0, 0.8);
-  transition: box-shadow 0.4s ease, color 0.3s, transform 0.12s ease;
+  background: #ffffff;
+  box-shadow: 0 20px 40px -18px rgba(0, 0, 0, 0.75);
 }
-.connect-btn:hover { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 0 0 1px #333333, 0 24px 48px -20px rgba(0, 0, 0, 0.8); }
-.connect-btn:active { transform: scale(0.97); }
-.connect-btn:disabled { color: var(--warn); }
+.connect-btn:disabled { opacity: 0.85; }
 
-.ring-wrap.connected .connect-btn {
-  color: var(--signal);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 0 0 1px rgba(255, 0, 0, 0.3), 0 24px 48px -20px rgba(0, 0, 0, 0.8), 0 0 44px -10px rgba(255, 0, 0, 0.35);
+.fist-mark {
+  width: 62px;
+  height: auto;
+  display: block;
+  pointer-events: none;
 }
 
 .connect-btn .label {
   font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.2px;
-  color: var(--text);
-}
-
-/* ---- The fist ---- */
-/* logo.png is the brand mark as supplied (black fist, red numerals, transparent
-   background) -- it needs a light backing to read against this app's black
-   surfaces, so it sits in a plain white circular badge rather than being
-   recolored or redrawn. */
-.fist-badge {
-  position: relative;
-  width: 86px;
-  height: 86px;
-  border-radius: 50%;
-  background: #ffffff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 10px 26px -8px rgba(0, 0, 0, 0.7);
-  transition: box-shadow 0.4s ease, transform 0.12s ease;
-  animation: fist-breathe 2.8s ease-in-out infinite;
-}
-
-.fist-mark {
-  width: 58px;
-  height: auto;
-  display: block;
-  pointer-events: none;
-}
-
-@keyframes fist-breathe {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.035); }
-}
-
-.ring-wrap.connected .fist-badge {
-  box-shadow: 0 0 0 3px rgba(255, 0, 0, 0.5), 0 10px 32px -6px rgba(255, 0, 0, 0.55);
-}
-
-/* Connecting/disconnecting: a quick clench pulse instead of the slow idle breath. */
-.ring-wrap.connecting .fist-badge,
-.ring-wrap.disconnecting .fist-badge {
-  animation: fist-clench 0.5s ease-in-out infinite;
-}
-@keyframes fist-clench {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(0.9); }
+  color: #000000;
 }
 
 /* ---- Stage captions ---- */
@@ -969,10 +874,8 @@ button:disabled { cursor: default; }
   position: relative;
   display: flex;
   margin-top: 30px;
-  background: rgba(0, 0, 0, 0.45);
-  backdrop-filter: blur(14px) saturate(150%);
-  -webkit-backdrop-filter: blur(14px) saturate(150%);
-  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.05);
+  border: none;
   border-radius: 999px;
   padding: 3px;
 }
@@ -984,8 +887,7 @@ button:disabled { cursor: default; }
   width: calc(50% - 3px);
   inset-inline-start: 3px;
   border-radius: 999px;
-  background: var(--signal-tint);
-  box-shadow: inset 0 0 0 1px rgba(255, 0, 0, 0.25);
+  background: #ffffff;
   transition: inset-inline-start 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 .mode-switch.tun .mode-thumb { inset-inline-start: 50%; }
@@ -1001,7 +903,7 @@ button:disabled { cursor: default; }
   white-space: nowrap;
   transition: color 0.2s;
 }
-.mode-pill.active { color: var(--signal); }
+.mode-pill.active { color: #000000; }
 .mode-pill:disabled { opacity: 0.6; }
 .mode-pill.active:disabled { opacity: 1; }
 
@@ -1078,7 +980,7 @@ button:disabled { cursor: default; }
   font-size: 12px;
   font-weight: 600;
   background: var(--bg-panel);
-  border-top: 1px solid rgba(255, 0, 0, 0.25);
+  border-top: 1px solid rgba(34, 197, 94, 0.25);
   color: var(--text);
   animation: notice-in 0.25s ease-out;
 }
@@ -1275,49 +1177,48 @@ button:disabled { cursor: default; }
 }
 .tab {
   flex: 1;
-  border: 1px solid var(--border);
+  border: none;
   border-radius: var(--radius-sm);
   padding: 8px 0;
   font-size: 12.5px;
   font-weight: 600;
   color: var(--text-faint);
-  transition: color 0.15s, border-color 0.15s, background 0.15s, transform 0.12s cubic-bezier(0.4, 0, 0.2, 1);
+  background: rgba(255, 255, 255, 0.02);
+  transition: color 0.15s, background 0.15s, transform 0.12s cubic-bezier(0.4, 0, 0.2, 1);
 }
-.tab:hover:not(.active) { color: var(--text-dim); border-color: #333333; }
+.tab:hover:not(.active) { color: var(--text-dim); border-color: transparent; background: rgba(255, 255, 255, 0.04); }
 .tab:active { transform: scale(0.97); }
 .tab.active {
-  color: var(--text);
-  border-color: var(--signal-dim);
-  background: rgba(255, 0, 0, 0.08);
+  color: #000000;
+  border-color: transparent;
+  background: #ffffff;
 }
 
 .btn {
   flex: 1;
   padding: 10px 0;
   border-radius: var(--radius-sm);
-  border: 1px solid var(--border);
+  border: none;
   background: var(--card);
   font-weight: 600;
   font-size: 12.5px;
-  transition: border-color 0.15s, background 0.15s, transform 0.12s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.15s;
+  transition: background 0.15s, transform 0.12s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.15s;
 }
-.btn:hover:not(:disabled) { border-color: #333333; }
+.btn:hover:not(:disabled) { background: var(--card-hover); }
 .btn:active:not(:disabled) { transform: scale(0.97); }
 .btn.primary {
-  background: var(--signal);
-  border-color: var(--signal);
-  color: #ffffff;
+  background: #ffffff;
+  color: #000000;
 }
-.btn.primary:hover:not(:disabled) { background: #ff3333; border-color: #ff3333; }
+.btn.primary:hover:not(:disabled) { background: #e2e2e2; }
 .btn.primary:disabled {
   opacity: 0.5;
 }
 .btn.danger {
   background: var(--danger);
-  border-color: var(--danger);
   color: #ffffff;
 }
-.btn.danger:hover:not(:disabled) { background: #ff6459; border-color: #ff6459; }
+.btn.danger:hover:not(:disabled) { background: #ff6459; }
 
 .confirm-modal { text-align: center; }
 .confirm-icon {
@@ -1608,7 +1509,7 @@ button:disabled { cursor: default; }
 }
 
 .switch.on {
-  background: rgba(255, 0, 0, 0.16);
+  background: rgba(34, 197, 94, 0.16);
   border-color: var(--signal-dim);
 }
 .switch.on:hover:not(:disabled) { border-color: var(--signal); }
@@ -1759,7 +1660,7 @@ button:disabled { cursor: default; }
 .finder-search input:focus {
   outline: none;
   border-color: var(--signal-dim);
-  box-shadow: 0 0 0 3px rgba(255, 0, 0, 0.08);
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.08);
 }
 
 .fs-clear {
@@ -1849,7 +1750,7 @@ kbd {
 .chip:hover { border-color: #333333; color: var(--text); }
 .chip.on {
   color: var(--signal);
-  border-color: rgba(255, 0, 0, 0.35);
+  border-color: rgba(34, 197, 94, 0.35);
   background: var(--signal-tint);
 }
 
@@ -1860,7 +1761,7 @@ kbd {
   border-radius: 999px;
   padding: 1px 5px;
 }
-.chip.on .chip-n { color: var(--signal); background: rgba(255, 0, 0, 0.14); }
+.chip.on .chip-n { color: var(--signal); background: rgba(34, 197, 94, 0.14); }
 
 .chip .icon.flip { transform: rotate(180deg); }
 .adv-toggle { margin-inline-start: auto; }
@@ -1941,7 +1842,7 @@ kbd {
 .mode-card:hover:not(:disabled) { border-color: #333333; color: var(--text); }
 .mode-card.on {
   color: var(--signal);
-  border-color: rgba(255, 0, 0, 0.35);
+  border-color: rgba(34, 197, 94, 0.35);
   background: var(--signal-tint);
 }
 .mode-card:disabled:not(.on) { opacity: 0.45; }
@@ -2042,7 +1943,7 @@ kbd {
   height: 64px;
   direction: ltr;
 }
-.speed-area polygon { fill: rgba(255, 0, 0, 0.25); }
+.speed-area polygon { fill: rgba(34, 197, 94, 0.25); }
 .speed-area.up polygon { fill: rgba(138, 138, 138, 0.25); }
 
 /* ---- recommendation banner ---- */
@@ -2052,8 +1953,8 @@ kbd {
   gap: 11px;
   margin: 0 16px 10px;
   padding: 11px 14px;
-  background: linear-gradient(90deg, rgba(255, 0, 0, 0.1), rgba(255, 0, 0, 0.03));
-  border: 1px solid rgba(255, 0, 0, 0.25);
+  background: linear-gradient(90deg, rgba(34, 197, 94, 0.1), rgba(34, 197, 94, 0.03));
+  border: 1px solid rgba(34, 197, 94, 0.25);
   border-radius: var(--radius-md);
   flex-shrink: 0;
   animation: panel-in 0.25s ease-out;
@@ -2096,7 +1997,7 @@ kbd {
 }
 .fcard:hover { background: var(--card-hover); border-color: var(--border); }
 .fcard.sel { border-color: var(--signal-dim); }
-.fcard.active { background: linear-gradient(180deg, rgba(255, 0, 0, 0.06), transparent); }
+.fcard.active { background: linear-gradient(180deg, rgba(34, 197, 94, 0.06), transparent); }
 .fcard.failed { opacity: 0.75; }
 .fcard.open { background: var(--card); border-color: var(--border); cursor: default; }
 
@@ -2263,14 +2164,14 @@ kbd {
   font-weight: 700;
   color: var(--signal);
   background: var(--signal-tint);
-  border: 1px solid rgba(255, 0, 0, 0.25);
+  border: 1px solid rgba(34, 197, 94, 0.25);
   border-radius: var(--radius-sm);
   padding: 6px 13px;
   opacity: 0;
   transition: opacity 0.15s, background 0.15s;
 }
 .fcard:hover .fcard-connect, .fcard.sel .fcard-connect, .fcard-connect:focus-visible { opacity: 1; }
-.fcard-connect:hover:not(:disabled) { background: rgba(255, 0, 0, 0.2); }
+.fcard-connect:hover:not(:disabled) { background: rgba(34, 197, 94, 0.2); }
 .fcard-connect:disabled { color: var(--text-faint); background: rgba(255, 255, 255, 0.03); border-color: var(--hairline); opacity: 1; }
 
 /* expanded detail */
@@ -2479,7 +2380,7 @@ kbd {
   stroke-linecap: round;
   transition: stroke-dashoffset 0.6s cubic-bezier(0.3, 0, 0.2, 1);
 }
-.dash-ring.active .dr-fill { filter: drop-shadow(0 0 5px rgba(255, 0, 0, 0.4)); }
+.dash-ring.active .dr-fill { filter: drop-shadow(0 0 5px rgba(34, 197, 94, 0.4)); }
 .dr-center {
   position: absolute;
   inset: 0;
@@ -2583,10 +2484,10 @@ kbd {
   direction: ltr;
   display: block;
 }
-.pc-area { fill: rgba(255, 0, 0, 0.13); }
+.pc-area { fill: rgba(34, 197, 94, 0.13); }
 .pc-line { fill: none; stroke: var(--signal); stroke-width: 1.6; stroke-linejoin: round; }
 .pc-miss { fill: var(--danger); }
-.pulse-chart.speed .pc-area, .pulse-chart.speed polygon { fill: rgba(255, 0, 0, 0.2); }
+.pulse-chart.speed .pc-area, .pulse-chart.speed polygon { fill: rgba(34, 197, 94, 0.2); }
 .pulse-chart.speed.up polygon { fill: rgba(138, 138, 138, 0.2); }
 
 .pulse-scale {
@@ -2714,7 +2615,7 @@ kbd {
   animation: feed-in 0.25s ease-out;
 }
 .lb-row:hover { background: rgba(255, 255, 255, 0.03); }
-.lb-row.top { background: linear-gradient(90deg, rgba(255, 0, 0, 0.08), transparent); }
+.lb-row.top { background: linear-gradient(90deg, rgba(34, 197, 94, 0.08), transparent); }
 
 .lb-rank {
   width: 17px;
@@ -2739,7 +2640,7 @@ kbd {
   font-size: 9.5px;
   font-weight: 700;
   color: var(--signal);
-  border: 1px solid rgba(255, 0, 0, 0.25);
+  border: 1px solid rgba(34, 197, 94, 0.25);
   border-radius: 6px;
   padding: 3px 9px;
   opacity: 0;
@@ -2842,7 +2743,7 @@ kbd {
   margin-top: 10px;
   padding: 8px 16px;
   background: var(--signal-tint);
-  border: 1px solid rgba(255, 0, 0, 0.25);
+  border: 1px solid rgba(34, 197, 94, 0.25);
   border-radius: 999px;
   animation: feed-in 0.3s ease-out 0.3s backwards;
 }

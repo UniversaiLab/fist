@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { motion } from 'framer-motion';
 import Icon from './Icon.jsx';
 import ContextMenu from './ContextMenu.jsx';
 import { RenameModal, EditProfileModal, EditSubscriptionModal, SubscriptionDetailsModal, ConfirmModal } from './ManageModals.jsx';
@@ -37,12 +38,18 @@ function groupStats(items, pings) {
 // App state) doesn't re-render every other card in a list that can run into
 // the hundreds. Relies on `onSelect`/`onDelete`/`onPing`/`onContextMenu` being
 // referentially stable (useCallback'd) across unrelated re-renders.
-const ServerCard = React.memo(function ServerCard({ profile, active, ms, onSelect, onRequestDelete, onPing, onContextMenu }) {
+const ServerCard = React.memo(function ServerCard({ profile, active, connected, ms, onSelect, onRequestDelete, onPing, onContextMenu }) {
   return (
-    <div className={`server-card ${active ? 'active' : ''}`} onContextMenu={(e) => onContextMenu(e, profile)}>
+    <motion.div
+      layout
+      className={`server-card ${active ? 'active' : ''} ${connected ? 'connected' : ''}`}
+      onContextMenu={(e) => onContextMenu(e, profile)}
+      transition={{ type: 'spring', stiffness: 500, damping: 34 }}
+    >
       <span className="proto-tag">{profile.protocol}</span>
       <div className="info" onClick={() => onSelect(profile.id)}>
         <div className="name">
+          {connected && <span className="connected-dot" aria-hidden="true" />}
           {profile.favorite && <Icon name="star" size={10} className="fav-mark" />}
           {profile.name || profile.address}
         </div>
@@ -57,7 +64,7 @@ const ServerCard = React.memo(function ServerCard({ profile, active, ms, onSelec
       <button className="del" onClick={() => onRequestDelete(profile)} title="Delete">
         <Icon name="close" size={13} />
       </button>
-    </div>
+    </motion.div>
   );
 });
 
@@ -309,6 +316,7 @@ export default function ServerList({
                 key={p.id}
                 profile={p}
                 active={p.id === activeProfileId}
+                connected={p.id === activeProfileId && connectionState === 'connected'}
                 ms={pings[p.id]}
                 onSelect={onSelect}
                 onRequestDelete={requestDeleteProfile}

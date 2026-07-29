@@ -21,6 +21,7 @@
     "@grpc/proto-loader": "^0.7.13",
     "@soul-connection/core-logic": "*",
     "electron-updater": "^6.3.9",
+    "framer-motion": "^11.18.2",
     "qrcode": "^1.5.4"
   },
   "devDependencies": {

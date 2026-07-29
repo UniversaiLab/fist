@@ -1,4 +1,5 @@
 import React from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 
 const STATUS_TEXT = {
   disconnected: 'Not connected',
@@ -20,22 +21,35 @@ function ConnectHero({ connectionState, connectionMode, activeProfile, onToggle,
 
   return (
     <section className={`stage ${connectionState}`}>
-      <div className="aurora aurora-idle" aria-hidden="true" />
-      <div className="aurora aurora-live" aria-hidden="true" />
+      <div className="stage-dots" aria-hidden="true" />
 
       <div className={`ring-wrap ${connectionState}`}>
         <div className="ring-halo" aria-hidden="true" />
-        <svg className="ring-svg" viewBox="0 0 200 200" aria-hidden="true">
-          <circle className="ring-track" cx="100" cy="100" r="88" />
-          <circle className="ring-spin" cx="100" cy="100" r="88" />
-          <circle className="ring-arc" cx="100" cy="100" r="88" />
-        </svg>
-        <button className="connect-btn" onClick={onToggle} disabled={busy}>
-          <div className="fist-badge">
-            <img className="fist-mark" src="./logo.png" alt="" />
-          </div>
-          <span className="label">{LABELS[connectionState]}</span>
-        </button>
+        <motion.button
+          className="connect-btn"
+          onClick={onToggle}
+          disabled={busy}
+          whileHover={busy ? {} : { scale: 1.03 }}
+          whileTap={busy ? {} : { scale: 0.95 }}
+          animate={busy ? { scale: [1, 0.91, 1] } : { scale: 1 }}
+          transition={busy
+            ? { duration: 0.7, repeat: Infinity, ease: 'easeInOut' }
+            : { type: 'spring', stiffness: 320, damping: 22 }}
+        >
+          <img className="fist-mark" src="./logo.png" alt="" />
+          <AnimatePresence mode="wait">
+            <motion.span
+              key={connectionState}
+              className="label"
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -4 }}
+              transition={{ duration: 0.18 }}
+            >
+              {LABELS[connectionState]}
+            </motion.span>
+          </AnimatePresence>
+        </motion.button>
       </div>
 
       <div className="stage-status">
