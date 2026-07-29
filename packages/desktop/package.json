@@ -1,10 +1,10 @@
 {
-  "name": "soul-connection",
-  "productName": "Soul Connection",
+  "name": "fist-desktop",
+  "productName": "FIST",
   "version": "1.0.3",
-  "description": "A modern cross-platform VLESS/Trojan/Shadowsocks/Hysteria2 client powered by sing-box",
+  "description": "FIST (1819) -- a modern cross-platform VLESS/Trojan/Shadowsocks/Hysteria2 client powered by sing-box",
   "main": "electron/main.cjs",
-  "author": "Soul",
+  "author": "FIST",
   "license": "MIT",
   "scripts": {
     "build:ui": "vite build",
@@ -32,8 +32,8 @@
     "vite": "^5.4.11"
   },
   "build": {
-    "appId": "com.kasra.soulconnection",
-    "productName": "Soul Connection",
+    "appId": "com.fist.app",
+    "productName": "FIST",
     "electronVersion": "33.4.11",
     "directories": {
       "output": "release"
@@ -93,8 +93,8 @@
     "publish": [
       {
         "provider": "github",
-        "owner": "mrsoulcommunity",
-        "repo": "Fullstack-Soul-Connection"
+        "owner": "UniversaiLab",
+        "repo": "fist"
       }
     ]
   }

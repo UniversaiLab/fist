@@ -46,7 +46,7 @@ export default function SettingsView({
       <Section title="Connection" icon="bolt" description="App behavior on launch and connect">
         <Toggle
           label="Launch on startup"
-          hint="Soul Connection starts automatically when you sign in"
+          hint="FIST starts automatically when you sign in"
           checked={settings.launchOnStartup}
           onChange={(v) => onUpdate({ launchOnStartup: v })}
         />
@@ -192,7 +192,7 @@ export default function SettingsView({
       <Section title="About" icon="info" description="Installed version and updates">
         <div className="setting-row">
           <div className="setting-text">
-            <span className="setting-label">Soul Connection</span>
+            <span className="setting-label">FIST · 1819</span>
             <span className="setting-hint mono">Version {appInfo?.version || '—'}</span>
           </div>
         </div>

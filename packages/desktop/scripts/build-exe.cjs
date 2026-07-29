@@ -70,7 +70,7 @@ function removeDirectoryIfExists(dir, label) {
     } catch (e) {
       if (!['EPERM', 'EBUSY', 'ENOTEMPTY'].includes(e.code) || attempt === 12) {
         console.warn(`\n[warn] Could not remove ${label}: ${dir}`);
-        console.warn('[warn] Close any running Soul Connection windows, Explorer preview panes, terminals opened inside release output folders, and antivirus scans, then remove it manually if needed.');
+        console.warn('[warn] Close any running FIST windows, Explorer preview panes, terminals opened inside release output folders, and antivirus scans, then remove it manually if needed.');
         console.warn(`[warn] Original error: ${e.code || e.name}: ${e.message}`);
         return false;
       }

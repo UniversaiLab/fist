@@ -154,7 +154,7 @@ function updateTray() {
   const label = connectionState === 'connected' ? `Connected — ${profile ? profile.name : ''}`
     : connectionState === 'connecting' ? 'Connecting…'
     : connectionState === 'disconnecting' ? 'Disconnecting…'
-    : 'Disconnected — Soul Connection';
+    : 'Disconnected — FIST';
   tray.setToolTip(label.trim());
   tray.setContextMenu(buildTrayMenu());
 }
@@ -201,7 +201,7 @@ function buildTrayMenu() {
       submenu: serverItems.length ? serverItems : [{ label: 'No configs available', enabled: false }],
     },
     { type: 'separator' },
-    { label: 'Open Soul Connection', click: () => mainWindow && mainWindow.show() },
+    { label: 'Open FIST', click: () => mainWindow && mainWindow.show() },
     {
       label: 'Settings',
       click: () => {
@@ -428,7 +428,7 @@ async function connect(profileId) {
     reconnectAttempts = 0;
     connectionState = 'connected';
     sendState();
-    notify('Soul Connection', `Connected to "${profile.name}"`);
+    notify('FIST', `Connected to "${profile.name}"`);
     if (getSettings().killSwitchEnabled) {
       killSwitchArmed = true;
       await clearKillSwitchBlock();
@@ -558,7 +558,7 @@ singbox.on('exit', async () => {
 });
 
 app.whenReady().then(async () => {
-  app.setAppUserModelId('com.kasra.soulconnection');
+  app.setAppUserModelId('com.fist.app');
 
   // If we're persisted in tunnel mode from a previous session but this launch
   // isn't elevated, re-launch elevated before ever showing a window -- avoids
@@ -1094,7 +1094,7 @@ ipcMain.handle('profiles:resetAllUsage', () => {
 ipcMain.handle('app:exportBackup', async () => {
   const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
     title: 'Back Up Configs',
-    defaultPath: `soul-connection-backup-${new Date().toISOString().slice(0, 10)}.json`,
+    defaultPath: `fist-backup-${new Date().toISOString().slice(0, 10)}.json`,
     filters: [{ name: 'JSON', extensions: ['json'] }],
   });
   if (canceled || !filePath) return { canceled: true };

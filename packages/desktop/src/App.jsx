@@ -19,7 +19,8 @@ function TitleBar({ maximized, onMinimize, onToggleMaximize, onClose }) {
     <div className="titlebar">
       <div className="titlebar-brand">
         <img src="./icon.png" alt="" />
-        <span>Soul Connection</span>
+        <span>FIST</span>
+        <span className="titlebar-brand-sub">1819</span>
       </div>
       <div className="titlebar-drag" onDoubleClick={onToggleMaximize} />
       <div className="titlebar-controls">
@@ -494,7 +495,7 @@ export default function App() {
           <header className="sidebar-head">
             <img className="mark" src="./icon.png" alt="" />
             <div className="brand">
-              <span className="brand-name">Soul Connection</span>
+              <span className="brand-name">FIST<em className="brand-tag">1819</em></span>
               <span className="brand-sub">
                 {profiles.length ? `${profiles.length} configs` : 'sing-box client'}
               </span>
