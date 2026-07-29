@@ -1,6 +1,6 @@
 :root {
   --bg: #000000;
-  --bg-sidebar: #000000;
+  --bg-sidebar: #0e0e0e;
   --bg-panel: #0a0a0a;
   --card: #1a1a1a;
   --card-hover: #242424;
@@ -167,7 +167,6 @@ button:disabled { cursor: default; }
   flex-direction: column;
   min-height: 0;
   background: var(--bg-sidebar);
-  border-inline-start: 1px solid var(--hairline);
 }
 
 .sidebar-head {
