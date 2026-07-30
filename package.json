@@ -13,7 +13,9 @@
     "dist:publish": "npm run dist:publish -w packages/desktop",
     "dist:portable": "npm run dist:portable -w packages/desktop",
     "dist:mac": "npm run dist:mac -w packages/desktop",
-    "dist:linux": "npm run dist:linux -w packages/desktop"
+    "dist:linux": "npm run dist:linux -w packages/desktop",
+    "marketplace:server": "npm run start -w packages/marketplace-server",
+    "marketplace:server:dev": "npm run dev -w packages/marketplace-server"
   },
   "license": "MIT"
 }
