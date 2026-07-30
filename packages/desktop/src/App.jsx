@@ -4,6 +4,7 @@ import AddModal from './components/AddModal.jsx';
 import ConnectHero from './components/ConnectHero.jsx';
 import StatusBar from './components/StatusBar.jsx';
 import SettingsView from './components/SettingsView.jsx';
+import Marketplace from './components/Marketplace.jsx';
 import ServerFinder from './components/ServerFinder.jsx';
 import Icon from './components/Icon.jsx';
 import { loadSession, saveSession, clearSession } from './utils/sessionState.js';
@@ -313,6 +314,12 @@ export default function App() {
     showToast('Config added');
   }, [refresh, showToast]);
 
+  const handleMarketplacePurchase = useCallback(async (listing) => {
+    await window.soul.addLink(listing.link);
+    await refresh();
+    showToast(`${listing.title} added to your servers`);
+  }, [refresh, showToast]);
+
   const handleAddSubscription = useCallback(async (url) => {
     const { profiles: added } = await window.soul.addSubscription(url);
     await refresh();
@@ -549,14 +556,25 @@ export default function App() {
 
         <main className="main">
           <header className="main-head">
-            <span className="main-title">{tab === 'settings' ? 'Settings' : 'Connection Control'}</span>
-            <button
-              className="icon-btn ghost"
-              onClick={() => setTab(tab === 'settings' ? 'servers' : 'settings')}
-              title={tab === 'settings' ? 'Back to Connection Control' : 'Settings'}
-            >
-              <Icon name={tab === 'settings' ? 'close' : 'settings'} size={16} />
-            </button>
+            <span className="main-title">
+              {tab === 'settings' ? 'Settings' : tab === 'marketplace' ? 'Marketplace' : 'Connection Control'}
+            </span>
+            <div className="main-head-actions">
+              <button
+                className="icon-btn ghost"
+                onClick={() => setTab(tab === 'marketplace' ? 'servers' : 'marketplace')}
+                title={tab === 'marketplace' ? 'Back to Connection Control' : 'Marketplace'}
+              >
+                <Icon name={tab === 'marketplace' ? 'close' : 'store'} size={16} />
+              </button>
+              <button
+                className="icon-btn ghost"
+                onClick={() => setTab(tab === 'settings' ? 'servers' : 'settings')}
+                title={tab === 'settings' ? 'Back to Connection Control' : 'Settings'}
+              >
+                <Icon name={tab === 'settings' ? 'close' : 'settings'} size={16} />
+              </button>
+            </div>
           </header>
 
           {tab === 'servers' ? (
@@ -567,6 +585,10 @@ export default function App() {
               onToggle={handleToggleConnect}
               onSetMode={handleSetMode}
             />
+          ) : tab === 'marketplace' ? (
+            <div className="settings-pane">
+              <Marketplace onBuy={handleMarketplacePurchase} onToast={showToast} />
+            </div>
           ) : (
             <div className="settings-pane">
               {settings && (

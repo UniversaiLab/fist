@@ -708,6 +708,12 @@ button:disabled { cursor: default; }
   color: var(--text-faint);
 }
 
+.main-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .icon-btn.ghost {
   background: none;
   border-color: transparent;
@@ -1392,6 +1398,213 @@ button:disabled { cursor: default; }
   gap: 10px;
   padding: 10px 20px 18px;
 }
+
+/* ================= Marketplace ================= */
+.marketplace {
+  flex: 1;
+  max-width: 920px;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 10px 20px 24px;
+}
+
+.mkt-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--card);
+  color: var(--text-faint);
+  font-size: 11.5px;
+}
+.mkt-banner .icon { flex-shrink: 0; color: var(--warn); }
+
+.mkt-tabs { max-width: 240px; }
+
+.mkt-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 12px;
+}
+
+.mkt-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px;
+  border-radius: var(--radius-md);
+  background: var(--card);
+  transition: background 0.15s;
+}
+.mkt-card:hover { background: var(--card-hover); }
+
+.mkt-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.mkt-region {
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+.mkt-title {
+  font-size: 13.5px;
+  font-weight: 700;
+  margin-top: 2px;
+}
+
+.mkt-creator {
+  font-size: 10.5px;
+  color: var(--text-faint);
+}
+
+.mkt-desc {
+  font-size: 11.5px;
+  color: var(--text-dim);
+  line-height: 1.45;
+  margin: 2px 0 4px;
+  flex: 1;
+}
+
+.mkt-card-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.mkt-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mkt-stars { display: inline-flex; gap: 1px; }
+.mkt-star-on { color: var(--warn); }
+.mkt-star-off { color: var(--border); }
+
+.mkt-sales {
+  font-size: 10.5px;
+  color: var(--text-faint);
+}
+
+.mkt-price {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--text);
+}
+.mkt-price-period {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-faint);
+  margin-inline-start: 2px;
+}
+
+.mkt-buy-btn {
+  margin-top: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+/* ---- Sell tab ---- */
+.mkt-sell {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.mkt-sell-stats {
+  display: flex;
+  gap: 10px;
+}
+.mkt-stat {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  background: var(--card);
+}
+.mkt-stat-label { font-size: 10.5px; color: var(--text-faint); }
+.mkt-stat-value { font-size: 17px; font-weight: 800; }
+.mkt-stat-earnings { color: var(--signal); }
+
+.mkt-publish-cta {
+  align-self: flex-start;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 16px;
+  flex: none;
+}
+
+.mkt-publish-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border-radius: var(--radius-md);
+  background: var(--card);
+}
+
+.mkt-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--text-faint);
+  flex: 1;
+}
+.mkt-field input, .mkt-field select {
+  background: var(--bg-panel);
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  color: var(--text);
+  font-size: 12.5px;
+  font-family: inherit;
+}
+.mkt-field input:focus, .mkt-field select:focus { outline: none; background: #141414; }
+
+.mkt-field-row {
+  display: flex;
+  gap: 10px;
+}
+.mkt-field-price { max-width: 140px; }
+
+.mkt-publish-actions {
+  justify-content: flex-end;
+  gap: 8px;
+}
+.mkt-publish-actions .btn { flex: none; padding: 9px 16px; }
+
+.mkt-my-listings {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mkt-my-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  background: var(--card);
+}
+
+.mkt-my-info { flex: 1; min-width: 0; }
+.mkt-my-title { font-size: 12.5px; font-weight: 600; }
+.mkt-my-sub { font-size: 10.5px; color: var(--text-faint); margin-top: 1px; }
+.mkt-my-earnings { font-size: 13px; font-weight: 800; color: var(--signal); }
 
 .settings-card {
   background: var(--card);
