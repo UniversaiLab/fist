@@ -4,10 +4,11 @@ const path = require('path');
 const fs = require('fs');
 
 const {
-  parseLink, parseMany, newId, parseSubscriptionUserinfo, buildCustomProfile,
-  buildSingboxConfig, DEFAULT_SETTINGS,
+  parseLink, parseMany, parseConfigText, parseRawOutbound, newId, parseSubscriptionUserinfo, buildCustomProfile,
+  buildSingboxConfig, encodeFistBundle, DEFAULT_SETTINGS,
 } = require('@soul-connection/core-logic');
 const { SingBoxProcess } = require('./lib/singboxProcess.cjs');
+const extensionHost = require('./lib/extensionHost.cjs');
 const systemProxy = require('./lib/systemProxy.cjs');
 const killSwitch = require('./lib/killSwitch.cjs');
 const { tcpPing } = require('./lib/pingTest.cjs');
@@ -70,6 +71,14 @@ singbox.on('log', (text) => {
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('proxy-log', entry);
   if (process.env.SC_DEBUG) console.log('[singbox]', entry.text);
 });
+
+// Whichever engine is actually driving the current connection -- the
+// built-in sing-box singleton (reused across connections), or a freshly
+// spawned ExtensionEngine (one per connection) when profile.engine names an
+// installed extension. connect()/disconnect() and the reconnect logic below
+// all go through this instead of the `singbox` binding directly, so a
+// plugin-driven connection gets the exact same lifecycle handling.
+let activeEngine = singbox;
 
 let mainWindow = null;
 let tray = null;
@@ -390,7 +399,8 @@ async function connect(profileId) {
   if (profile.protocol === 'mtproto') {
     throw new Error('MTProto configs cannot be tunneled; use them directly in Telegram');
   }
-  if (!fs.existsSync(singboxBin)) {
+  const usesExtension = profile.engine && profile.engine !== 'sing-box';
+  if (!usesExtension && !fs.existsSync(singboxBin)) {
     throw new Error('The connection core (sing-box) file was not found. Your antivirus may have removed or quarantined it. Please add the app folder to your antivirus exclusions and reinstall/relaunch the app.');
   }
   if (connectionState === 'connected' || connectionState === 'connecting') {
@@ -400,6 +410,44 @@ async function connect(profileId) {
   sendState();
   const mode = store.get('connectionMode', 'proxy');
   const settings = getSettings();
+
+  // Plug-and-play path: an extension owns everything about this connection
+  // itself (its own local proxy/TUN/routing) -- we just spawn it and relay
+  // its state, the same way we relay sing-box's.
+  if (usesExtension) {
+    try {
+      const engine = new extensionHost.ExtensionEngine(userDataDir, profile.engine);
+      engine.on('log', (text) => {
+        const entry = { t: Date.now(), text };
+        proxyLogRing.push(entry);
+        if (proxyLogRing.length > MAX_PROXY_LOGS) proxyLogRing.splice(0, proxyLogRing.length - MAX_PROXY_LOGS);
+        if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('proxy-log', entry);
+      });
+      engine.on('exit', handleEngineExit);
+      await engine.start(profile);
+      activeEngine = engine;
+      store.set('activeProfileId', profileId);
+      store.set('activeMode', mode);
+      const profiles = store.get('profiles', []);
+      const p = profiles.find((x) => x.id === profileId);
+      if (p) { p.lastUsedAt = Date.now(); store.set('profiles', profiles); }
+      currentPorts = null; // the extension manages its own local ports, if any
+      connectedAt = Date.now();
+      reconnectAttempts = 0;
+      connectionState = 'connected';
+      sendState();
+      notify('FIST', `Connected to "${profile.name}" via extension`);
+      return;
+    } catch (err) {
+      connectionState = 'disconnected';
+      currentPorts = null;
+      connectedAt = null;
+      sendState();
+      throw err;
+    }
+  }
+
+  activeEngine = singbox;
   try {
     const socksPort = await findFreePort(settings.socksPort);
     const preferredHttp = settings.httpPort === socksPort ? settings.httpPort + 1 : settings.httpPort;
@@ -493,7 +541,7 @@ async function disconnect() {
   sendState();
   await disableSystemProxySafetyNet();
   expectedExit = true;
-  await singbox.stop();
+  await activeEngine.stop();
   connectionState = 'disconnected';
   persistSessionTraffic();
   currentPorts = null;
@@ -508,7 +556,9 @@ async function disconnect() {
 
 // Detects the tunnel dropping on its own (crash, server-side kick, network
 // change) as opposed to a user-initiated disconnect, and tries to recover.
-singbox.on('exit', async () => {
+// Shared between the built-in sing-box engine and any ExtensionEngine, so a
+// plugin-driven connection gets the exact same drop/reconnect handling.
+async function handleEngineExit() {
   if (expectedExit) { expectedExit = false; return; }
   if (connectionState !== 'connected') return;
 
@@ -554,8 +604,9 @@ singbox.on('exit', async () => {
         await systemProxy.enable('127.0.0.1', currentPorts.httpPort, systemProxy.buildBypass(getSettings().customBypass));
       } catch { /* ignore */ }
     }
-  } catch { /* singbox's own 'exit' event will fire again and retry, up to the cap */ }
-});
+  } catch { /* the engine's own 'exit' event will fire again and retry, up to the cap */ }
+}
+singbox.on('exit', handleEngineExit);
 
 app.whenReady().then(async () => {
   app.setAppUserModelId('com.fist.app');
@@ -664,26 +715,126 @@ ipcMain.handle('settings:setMode', async (_e, mode) => {
   if (mode !== 'proxy' && mode !== 'tun') throw new Error('Invalid mode');
   if (connectionState !== 'disconnected') throw new Error('Disconnect first');
 
+  // Persist the requested mode *before* possibly relaunching elevated --
+  // relaunchElevated calls app.exit() as soon as the elevated instance is
+  // confirmed launched, which aborts this handler mid-flight. Setting the
+  // store first means the new elevated instance actually boots into 'tun'
+  // instead of silently coming back up in 'proxy' and making the click look
+  // like it did nothing.
+  store.set('connectionMode', mode);
+
   if (mode === 'tun' && !(await isElevated())) {
     notify('Relaunching with Administrator Access', 'Full Tunnel mode requires administrator/root access. The app will reopen shortly…');
     const relaunched = await relaunchElevated(app);
     if (!relaunched) {
+      store.set('connectionMode', 'proxy');
       throw new Error('You must approve the administrator/root access request to enable Full Tunnel mode');
     }
     return mode; // unreachable in practice -- app.exit() fires inside relaunchElevated
   }
 
-  store.set('connectionMode', mode);
   return mode;
 });
 
 ipcMain.handle('profiles:addLink', (_e, link) => {
-  const profile = parseLink(link);
-  if (!profile) throw new Error('Invalid or unsupported config');
+  // parseConfigText covers a single share link (the common case), a .fist
+  // bundle (possibly many profiles), or a pasted WireGuard .conf -- all
+  // come back as an array so this one handler covers all three.
+  const parsed = parseConfigText(link);
+  if (!parsed.length) throw new Error('Invalid or unsupported config');
+  const profiles = store.get('profiles', []);
+  profiles.push(...parsed);
+  store.set('profiles', profiles);
+  return parsed.length === 1 ? parsed[0] : parsed;
+});
+
+ipcMain.handle('profiles:addFile', async (_e) => {
+  const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow, {
+    title: 'Import Config File',
+    filters: [
+      { name: 'Supported configs', extensions: ['fist', 'conf', 'txt'] },
+      { name: 'All files', extensions: ['*'] },
+    ],
+    properties: ['openFile'],
+  });
+  if (canceled || !filePaths.length) return { canceled: true };
+
+  let text;
+  try {
+    text = fs.readFileSync(filePaths[0], 'utf8');
+  } catch {
+    throw new Error('Could not read the selected file');
+  }
+
+  const parsed = parseConfigText(text);
+  if (!parsed.length) throw new Error('No supported configs found in that file');
+
+  const profiles = store.get('profiles', []);
+  profiles.push(...parsed);
+  store.set('profiles', profiles);
+  return { canceled: false, profiles: parsed };
+});
+
+ipcMain.handle('profiles:exportFist', async (_e, ids) => {
+  const all = store.get('profiles', []);
+  const selected = Array.isArray(ids) && ids.length ? all.filter((p) => ids.includes(p.id)) : all;
+  if (!selected.length) throw new Error('No configs to export');
+
+  const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
+    title: 'Export as .fist',
+    defaultPath: `fist-export-${new Date().toISOString().slice(0, 10)}.fist`,
+    filters: [{ name: 'FIST bundle', extensions: ['fist'] }],
+  });
+  if (canceled || !filePath) return { canceled: true };
+
+  fs.writeFileSync(filePath, encodeFistBundle(selected));
+  return { canceled: false, filePath, count: selected.length };
+});
+
+// Plug-and-play: adds a config the built-in parsers didn't recognize, using
+// whichever engine the user explicitly picked -- either our own sing-box
+// (as a raw outbound JSON passthrough) or an installed extension.
+ipcMain.handle('profiles:addWithEngine', async (_e, { text, engine }) => {
+  let profile;
+  if (engine === 'sing-box') {
+    profile = parseRawOutbound(text);
+    if (!profile) throw new Error('That does not look like a valid sing-box outbound JSON object (needs at least a "type" field)');
+  } else {
+    const parsed = await extensionHost.parseWithExtension(userDataDir, engine, text);
+    profile = {
+      id: newId(),
+      protocol: 'extension',
+      engine,
+      link: 'extension-config',
+      name: parsed.name || `${parsed.address || 'unknown'}:${parsed.port || ''}`,
+      address: parsed.address || '',
+      port: Number(parsed.port) || 0,
+      rawConfig: text,
+      createdAt: Date.now(),
+      subId: null,
+    };
+  }
   const profiles = store.get('profiles', []);
   profiles.push(profile);
   store.set('profiles', profiles);
   return profile;
+});
+
+ipcMain.handle('extensions:list', () => extensionHost.listExtensions(userDataDir));
+
+ipcMain.handle('extensions:install', async () => {
+  const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow, {
+    title: 'Install Extension (select its folder)',
+    properties: ['openDirectory'],
+  });
+  if (canceled || !filePaths.length) return { canceled: true };
+  const manifest = extensionHost.installExtension(userDataDir, filePaths[0]);
+  return { canceled: false, extension: manifest };
+});
+
+ipcMain.handle('extensions:remove', (_e, id) => {
+  extensionHost.removeExtension(userDataDir, id);
+  return extensionHost.listExtensions(userDataDir);
 });
 
 ipcMain.handle('profiles:addCustom', (_e, fields) => {

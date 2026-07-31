@@ -1,5 +1,7 @@
 'use strict';
 
+const { encodeFistBundle, decodeFistBundle, isFistBundle } = require('./fistFormat.js');
+
 function b64decode(s) {
   s = s.replace(/-/g, '+').replace(/_/g, '/').replace(/\s+/g, '');
   while (s.length % 4) s += '=';
@@ -230,6 +232,115 @@ function parseMtproto(link) {
   return p;
 }
 
+// npvt-ssh:// is another app's share-link format for a plain SSH-tunneled
+// proxy: npvt-ssh://<base64(JSON)>, e.g.
+//   {"sshConfigType":"SSH-Direct","remarks":"My Server","sshHost":"1.2.3.4",
+//    "sshPort":22,"sshUsername":"user","sshPassword":"pass",
+//    "dnsTTMode":"UDP","udpgwTransparentDNS":true}
+// sing-box has its own native `ssh` outbound, so this profile tunnels
+// through our existing engine same as everything else -- no separate
+// ssh2/socks stack needed.
+function sshProfileFromObject(obj, link) {
+  if (!obj || !obj.sshHost || !obj.sshUsername) return null;
+  const p = baseProfile('ssh', link);
+  p.address = String(obj.sshHost);
+  p.port = Number(obj.sshPort) || 22;
+  p.username = String(obj.sshUsername);
+  p.password = obj.sshPassword != null ? String(obj.sshPassword) : '';
+  p.name = obj.remarks || `${p.address}:${p.port}`;
+  return p;
+}
+
+function parseNpvtSsh(link) {
+  if (!link.startsWith('npvt-ssh://')) return null;
+  let obj;
+  try {
+    obj = JSON.parse(b64decode(link.slice('npvt-ssh://'.length)));
+  } catch {
+    return null;
+  }
+  return sshProfileFromObject(obj, link);
+}
+
+// The competing app this format comes from also accepts the raw JSON pasted
+// directly (no npvt-ssh:// wrapper, no base64) -- matched here by shape
+// (sshHost/sshUsername keys) rather than by any scheme prefix.
+function parseSshJson(text) {
+  let obj;
+  try {
+    obj = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  return sshProfileFromObject(obj, `npvt-ssh-json:${text.slice(0, 40)}`);
+}
+
+// Plug-and-play fallback: the user explicitly chose "run this as a raw
+// sing-box outbound" for a config none of our parsers recognized. Only
+// reached through that explicit choice (see electron/main.cjs's
+// profiles:addWithEngine) -- never auto-detected, since silently treating
+// arbitrary JSON as a valid outbound would be more surprising than helpful.
+function parseRawOutbound(text) {
+  let obj;
+  try {
+    obj = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  if (!obj || typeof obj !== 'object' || typeof obj.type !== 'string') return null;
+  const p = baseProfile('raw', 'raw-outbound');
+  p.engine = 'sing-box';
+  p.rawOutbound = obj;
+  p.address = typeof obj.server === 'string' ? obj.server : '';
+  p.port = Number(obj.server_port) || 0;
+  p.name = `${obj.type}${p.address ? ' · ' + p.address : ''}`;
+  return p;
+}
+
+// WireGuard has no share-link scheme in real-world use -- every client
+// (including the official ones) distributes configs as a wg-quick .conf
+// INI file, so that's what we parse here rather than inventing a URI.
+function parseWireguardConf(text) {
+  const sections = {};
+  let current = null;
+  for (const rawLine of String(text || '').split(/\r?\n/)) {
+    const line = rawLine.replace(/#.*$/, '').trim();
+    if (!line) continue;
+    const sectionMatch = line.match(/^\[(\w+)\]$/i);
+    if (sectionMatch) {
+      current = sectionMatch[1].toLowerCase();
+      sections[current] = sections[current] || {};
+      continue;
+    }
+    if (!current) continue;
+    const eq = line.indexOf('=');
+    if (eq < 0) continue;
+    const key = line.slice(0, eq).trim().toLowerCase();
+    const value = line.slice(eq + 1).trim();
+    sections[current][key] = value;
+  }
+
+  const iface = sections.interface;
+  const peer = sections.peer;
+  if (!iface || !peer || !iface.privatekey || !peer.publickey || !peer.endpoint) return null;
+
+  const endpointMatch = peer.endpoint.match(/^\[?([^\]]+)\]?:(\d+)$/);
+  if (!endpointMatch) return null;
+
+  const p = baseProfile('wireguard', 'wireguard-conf');
+  p.address = endpointMatch[1];
+  p.port = Number(endpointMatch[2]);
+  p.privateKey = iface.privatekey;
+  p.localAddress = (iface.address || '').split(',').map((s) => s.trim()).filter(Boolean);
+  p.dns = iface.dns || '';
+  p.peerPublicKey = peer.publickey;
+  p.presharedKey = peer.presharedkey || '';
+  p.allowedIps = (peer.allowedips || '0.0.0.0/0,::/0').split(',').map((s) => s.trim()).filter(Boolean);
+  p.keepalive = peer.persistentkeepalive ? Number(peer.persistentkeepalive) : undefined;
+  p.name = `${p.address}:${p.port}`;
+  return p;
+}
+
 function parseLink(link) {
   link = String(link || '').trim();
   if (!link) return null;
@@ -241,10 +352,32 @@ function parseLink(link) {
     if (link.startsWith('hysteria2://') || link.startsWith('hy2://')) return parseHysteria2(link);
     if (link.startsWith('mtproto://')) return parseMtproto(link);
     if (link.startsWith('tg://proxy') || /^https:\/\/t\.me\/proxy/i.test(link)) return parseMtproto(link);
+    if (link.startsWith('npvt-ssh://')) return parseNpvtSsh(link);
   } catch {
     return null;
   }
   return null;
+}
+
+// Smart multi-format entry point used for both pasted text and imported
+// files: a .fist bundle (possibly many profiles), a WireGuard .conf (one
+// profile), or ordinary share link(s) (one per line) all come through here
+// and always come back as an array.
+function parseConfigText(text) {
+  const trimmed = String(text || '').trim();
+  if (!trimmed) return [];
+  if (isFistBundle(trimmed)) {
+    return decodeFistBundle(trimmed, baseProfile);
+  }
+  if (/^\[interface\]/im.test(trimmed)) {
+    const p = parseWireguardConf(trimmed);
+    return p ? [p] : [];
+  }
+  if (trimmed.startsWith('{')) {
+    const p = parseSshJson(trimmed);
+    return p ? [p] : [];
+  }
+  return parseMany(trimmed);
 }
 
 // Parse a block of text: multiple share links, or a base64-encoded
@@ -386,6 +519,18 @@ function buildMtprotoLink(p) {
   return `tg://proxy${qs(pairs)}#${name}`;
 }
 
+function buildNpvtSshLink(p) {
+  const obj = {
+    sshConfigType: 'SSH-Direct',
+    remarks: p.name || `${p.address}:${p.port}`,
+    sshHost: p.address,
+    sshPort: p.port,
+    sshUsername: p.username,
+    sshPassword: p.password,
+  };
+  return `npvt-ssh://${Buffer.from(JSON.stringify(obj), 'utf8').toString('base64')}`;
+}
+
 function buildLink(p) {
   switch (p.protocol) {
     case 'vmess': return buildVmessLink(p);
@@ -394,13 +539,14 @@ function buildLink(p) {
     case 'shadowsocks': return buildSsLink(p);
     case 'hysteria2': return buildHysteria2Link(p);
     case 'mtproto': return buildMtprotoLink(p);
+    case 'ssh': return buildNpvtSshLink(p);
     default: return null;
   }
 }
 
 // ---- Custom config: validate manual form input into a full profile ----
 
-const CUSTOM_PROTOCOLS = new Set(['vmess', 'vless', 'trojan', 'shadowsocks']);
+const CUSTOM_PROTOCOLS = new Set(['vmess', 'vless', 'trojan', 'shadowsocks', 'ssh']);
 const CUSTOM_NETWORKS = new Set(['tcp', 'ws', 'grpc', 'h2', 'http', 'kcp']);
 const CUSTOM_SECURITIES = new Set(['none', 'tls', 'reality']);
 const UUID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
@@ -484,6 +630,14 @@ function buildCustomProfile(fields) {
     p.network = 'tcp';
     p.security = 'none';
   }
+  if (protocol === 'ssh') {
+    const username = str(f.username, 256);
+    if (!username) throw new Error('Enter a username');
+    p.username = username;
+    p.password = str(f.password, 256);
+    p.network = 'tcp';
+    p.security = 'none';
+  }
 
   if (!p.name) p.name = `${p.address}:${p.port}`;
   p.link = buildLink(p);
@@ -491,6 +645,7 @@ function buildCustomProfile(fields) {
 }
 
 module.exports = {
-  parseLink, parseMany, newId, parseSubscriptionUserinfo,
+  parseLink, parseMany, parseConfigText, parseWireguardConf, parseRawOutbound, newId, parseSubscriptionUserinfo,
   buildLink, buildCustomProfile,
+  encodeFistBundle: (profiles) => encodeFistBundle(profiles, baseProfile),
 };

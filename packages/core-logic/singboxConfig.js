@@ -95,6 +95,18 @@ function buildOutbound(p) {
         method: p.method,
         password: p.password,
       };
+    case 'ssh':
+      // sing-box has a native `ssh` outbound (confirmed via `sing-box
+      // check`), so a plain SSH-tunneled proxy runs through the same
+      // engine as everything else -- no separate ssh2/socks stack needed.
+      return {
+        type: 'ssh',
+        tag: 'proxy',
+        server: p.address,
+        server_port: p.port,
+        user: p.username,
+        password: p.password,
+      };
     case 'hysteria2': {
       const out = {
         type: 'hysteria2',
@@ -113,9 +125,47 @@ function buildOutbound(p) {
       // MTProto proxies are consumed directly by Telegram (server/port/secret) --
       // they aren't a tunnel this app can carry system traffic through.
       throw new Error('MTProto profiles cannot be tunneled; connect through Telegram directly.');
+    case 'wireguard':
+      // WireGuard isn't a regular sing-box "outbound" -- see buildWireguardEndpoint
+      // and its use in buildSingboxConfig below.
+      throw new Error('WireGuard profiles are built as an endpoint, not an outbound.');
+    case 'raw':
+      // Plug-and-play escape hatch for any protocol sing-box supports natively
+      // that we haven't hand-built a parser/form for (socks, tuic, naive,
+      // shadowtls, anytls, ...): the user pastes sing-box's own outbound JSON
+      // shape directly and we run it as-is, just forcing the tag so routing/
+      // stats still line up with everything else.
+      if (!p.rawOutbound || typeof p.rawOutbound !== 'object') {
+        throw new Error('Raw profile is missing its outbound JSON.');
+      }
+      return { ...p.rawOutbound, tag: 'proxy' };
     default:
       throw new Error(`Unsupported protocol: ${p.protocol}`);
   }
+}
+
+// WireGuard is modeled as a sing-box "endpoint" (its own top-level config
+// section), not an "outbound" like every other protocol here -- confirmed
+// against the bundled sing-box binary's schema (`sing-box check`), which
+// also confirmed this build needs the with_wireguard and with_gvisor tags
+// to actually run one, not just accept the config shape.
+function buildWireguardEndpoint(p) {
+  const peer = {
+    address: p.address,
+    port: p.port,
+    public_key: p.peerPublicKey,
+    allowed_ips: p.allowedIps && p.allowedIps.length ? p.allowedIps : ['0.0.0.0/0', '::/0'],
+  };
+  if (p.presharedKey) peer.pre_shared_key = p.presharedKey;
+  if (p.keepalive) peer.persistent_keepalive_interval = Number(p.keepalive);
+
+  return {
+    type: 'wireguard',
+    tag: 'proxy',
+    address: p.localAddress && p.localAddress.length ? p.localAddress : ['172.16.0.2/32'],
+    private_key: p.privateKey,
+    peers: [peer],
+  };
 }
 
 function buildSingboxConfig(profile, opts = {}) {
@@ -156,11 +206,13 @@ function buildSingboxConfig(profile, opts = {}) {
     });
   }
 
+  const isWireguard = profile.protocol === 'wireguard';
+
   const outbounds = [
-    buildOutbound(profile),
     { type: 'direct', tag: 'direct' },
     { type: 'block', tag: 'block' },
   ];
+  if (!isWireguard) outbounds.unshift(buildOutbound(profile));
 
   const config = {
     // sing-box has no 'none' level -- 'none' instead disables logging outright.
@@ -179,9 +231,14 @@ function buildSingboxConfig(profile, opts = {}) {
     },
   };
 
+  if (isWireguard) config.endpoints = [buildWireguardEndpoint(profile)];
+
   // Traffic stats: sing-box's v2ray_api compatibility layer exposes the same
   // StatsService gRPC contract xray-core does, which statsApi.cjs polls for
-  // live upload/download counters on the 'proxy' outbound.
+  // live upload/download counters on the 'proxy' outbound. Endpoints (used
+  // for WireGuard) aren't outbounds, so this compatibility layer may not
+  // report live speed for a WireGuard connection even though the tunnel
+  // itself works -- not verified either way against a real WireGuard peer.
   if (opts.apiPort) {
     config.experimental = {
       v2ray_api: {

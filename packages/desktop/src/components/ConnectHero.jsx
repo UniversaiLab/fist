@@ -1,5 +1,7 @@
-import React, { useMemo } from 'react';
+import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import MapBackground from './MapBackground.jsx';
+import VaporLog from './VaporLog.jsx';
 
 const STATUS_TEXT = {
   disconnected: 'Not connected',
@@ -15,39 +17,14 @@ const LABELS = {
   disconnecting: '',
 };
 
-const PULSE_DOT_COUNT = 18;
-
 function ConnectHero({ connectionState, connectionMode, activeProfile, onToggle, onSetMode }) {
   const busy = connectionState === 'connecting' || connectionState === 'disconnecting';
   const modeLocked = connectionState !== 'disconnected';
 
-  // Scattered once per mount -- while busy, these randomly pulse green across
-  // the dotted backdrop instead of showing a spinner/label on the logo itself.
-  const pulseDots = useMemo(() => Array.from({ length: PULSE_DOT_COUNT }, () => ({
-    top: `${5 + Math.random() * 90}%`,
-    left: `${5 + Math.random() * 90}%`,
-    delay: Math.random() * 2.2,
-    duration: 1.1 + Math.random() * 1.3,
-  })), []);
-
   return (
     <section className={`stage ${connectionState}`}>
-      <div className="stage-glow" aria-hidden="true" />
-      <div className="stage-dots" aria-hidden="true" />
-      <div className="stage-pulse-dots" aria-hidden="true">
-        {busy && pulseDots.map((d, i) => (
-          <span
-            key={i}
-            className="pulse-dot"
-            style={{
-              top: d.top,
-              left: d.left,
-              animationDelay: `${d.delay}s`,
-              animationDuration: `${d.duration}s`,
-            }}
-          />
-        ))}
-      </div>
+      <MapBackground connectionState={connectionState} activeProfile={activeProfile} />
+      <VaporLog active={connectionState === 'connected'} />
 
       <div className={`ring-wrap ${connectionState}`}>
         <div className="ring-halo" aria-hidden="true" />

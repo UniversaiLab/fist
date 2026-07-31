@@ -14,7 +14,14 @@ contextBridge.exposeInMainWorld('soul', {
 
   listProfiles: () => ipcRenderer.invoke('profiles:list'),
   addLink: (link) => ipcRenderer.invoke('profiles:addLink', link),
+  addFile: () => ipcRenderer.invoke('profiles:addFile'),
+  addWithEngine: (text, engine) => ipcRenderer.invoke('profiles:addWithEngine', { text, engine }),
+  exportFist: (ids) => ipcRenderer.invoke('profiles:exportFist', ids),
   deleteProfile: (id) => ipcRenderer.invoke('profiles:delete', id),
+
+  listExtensions: () => ipcRenderer.invoke('extensions:list'),
+  installExtension: () => ipcRenderer.invoke('extensions:install'),
+  removeExtension: (id) => ipcRenderer.invoke('extensions:remove', id),
   renameProfile: (id, name) => ipcRenderer.invoke('profiles:rename', { id, name }),
   updateProfile: (id, link) => ipcRenderer.invoke('profiles:update', { id, link }),
 

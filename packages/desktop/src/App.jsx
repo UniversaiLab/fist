@@ -308,10 +308,25 @@ export default function App() {
   }, [showToast]);
 
   const handleAddLink = useCallback(async (link) => {
-    await window.soul.addLink(link);
+    const result = await window.soul.addLink(link);
+    await refresh();
+    setShowAdd(false);
+    showToast(Array.isArray(result) ? `${result.length} configs added` : 'Config added');
+  }, [refresh, showToast]);
+
+  const handleAddWithEngine = useCallback(async (text, engine) => {
+    await window.soul.addWithEngine(text, engine);
     await refresh();
     setShowAdd(false);
     showToast('Config added');
+  }, [refresh, showToast]);
+
+  const handleAddFile = useCallback(async () => {
+    const result = await window.soul.addFile();
+    if (result.canceled) return;
+    await refresh();
+    setShowAdd(false);
+    showToast(`${result.profiles.length} config${result.profiles.length === 1 ? '' : 's'} imported`);
   }, [refresh, showToast]);
 
   const handleMarketplacePurchase = useCallback(async (listing) => {
@@ -659,8 +674,10 @@ export default function App() {
         <AddModal
           onClose={() => setShowAdd(false)}
           onAddLink={handleAddLink}
+          onAddFile={handleAddFile}
           onAddSubscription={handleAddSubscription}
           onAddCustom={handleAddCustom}
+          onAddWithEngine={handleAddWithEngine}
         />
       )}
     </div>

@@ -49,7 +49,7 @@ jobs:
         shell: bash
         run: |
           set -e
-          go install -tags "with_quic,with_grpc,with_utls,with_clash_api,with_v2ray_api" \
+          go install -tags "with_quic,with_grpc,with_utls,with_clash_api,with_v2ray_api,with_wireguard,with_gvisor" \
             "github.com/sagernet/sing-box/cmd/sing-box@${SINGBOX_VERSION}"
           mkdir -p "packages/desktop/bin/${{ matrix.platform }}"
           if [ "${{ matrix.platform }}" = "win32" ]; then

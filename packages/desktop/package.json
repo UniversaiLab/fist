@@ -2,7 +2,7 @@
   "name": "fist-desktop",
   "productName": "FIST",
   "version": "1.0.3",
-  "description": "FIST (1819) -- a modern cross-platform VLESS/Trojan/Shadowsocks/Hysteria2 client powered by sing-box",
+  "description": "FIST (1819) -- a modern cross-platform VLESS/Trojan/Shadowsocks/Hysteria2/WireGuard client powered by sing-box",
   "main": "electron/main.cjs",
   "author": "FIST",
   "license": "MIT",
@@ -17,11 +17,14 @@
     "dist:linux": "node scripts/build-exe.cjs --linux"
   },
   "dependencies": {
+    "@fontsource/space-mono": "^5.3.0",
     "@grpc/grpc-js": "^1.12.2",
     "@grpc/proto-loader": "^0.7.13",
     "@soul-connection/core-logic": "*",
+    "dotted-map": "^3.1.0",
     "electron-updater": "^6.3.9",
     "framer-motion": "^11.18.2",
+    "lucide-react": "^1.28.0",
     "qrcode": "^1.5.4"
   },
   "devDependencies": {
