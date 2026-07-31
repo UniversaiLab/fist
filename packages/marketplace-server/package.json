@@ -1,20 +1,15 @@
 {
   "name": "@fist/marketplace-server",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
-  "description": "Config marketplace backend (creator accounts, listings, purchases) with mocked payment processing -- no real money moves through this service.",
+  "description": "Config marketplace backend (creator accounts, listings, purchases) on Bun + Hono + Redis, with mocked payment processing -- no real money moves through this service.",
+  "type": "module",
   "main": "src/server.js",
-  "type": "commonjs",
   "scripts": {
-    "start": "node src/server.js",
-    "dev": "node --watch src/server.js"
+    "start": "bun run src/server.js",
+    "dev": "bun --watch src/server.js"
   },
   "dependencies": {
-    "better-sqlite3": "^11.3.0",
-    "bcryptjs": "^2.4.3",
-    "cors": "^2.8.5",
-    "express": "^4.21.1",
-    "jsonwebtoken": "^9.0.2"
-  },
-  "license": "MIT"
+    "hono": "^4.6.14"
+  }
 }

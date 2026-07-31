@@ -1,37 +1,32 @@
-'use strict';
+import { Hono } from 'hono';
+import { cors } from 'hono/cors';
+import * as auth from './auth.js';
+import listings from './listings.js';
+import purchases from './purchases.js';
+import earnings from './earnings.js';
 
-const express = require('express');
-const cors = require('cors');
-const auth = require('./auth');
-const listingsRouter = require('./listings');
-const purchasesRouter = require('./purchases');
-const earningsRouter = require('./earnings');
+const app = new Hono();
+app.use('*', cors());
 
-const app = express();
-app.use(cors());
-app.use(express.json());
-
-app.get('/api/health', (req, res) => {
-  res.json({ ok: true, mock: true, note: 'Marketplace backend -- payments are simulated, no real money moves.' });
-});
+app.get('/api/health', (c) => c.json({
+  ok: true,
+  mock: true,
+  note: 'Marketplace backend -- payments are simulated, no real money moves.',
+}));
 
 app.post('/api/auth/register', auth.register);
 app.post('/api/auth/login', auth.login);
 
-app.use('/api/listings', listingsRouter);
-app.use('/api/purchases', purchasesRouter);
-app.use('/api/earnings', earningsRouter);
+app.route('/api/listings', listings);
+app.route('/api/purchases', purchases);
+app.route('/api/earnings', earnings);
 
-app.use((err, req, res, next) => { // eslint-disable-line no-unused-vars
+app.onError((err, c) => {
   console.error(err);
-  res.status(500).json({ error: 'internal server error' });
+  return c.json({ error: 'internal server error' }, 500);
 });
 
-const PORT = process.env.PORT || 4310;
-if (require.main === module) {
-  app.listen(PORT, () => {
-    console.log(`[marketplace-server] listening on http://localhost:${PORT} (mocked payments -- no real money moves)`);
-  });
-}
+const port = Number(process.env.PORT) || 4310;
+console.log(`[marketplace-server] listening on http://localhost:${port} (mocked payments -- no real money moves)`);
 
-module.exports = app;
+export default { port, fetch: app.fetch };
