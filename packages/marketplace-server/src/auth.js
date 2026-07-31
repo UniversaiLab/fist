@@ -1,73 +1,60 @@
-'use strict';
+import * as store from './redis.js';
+import * as jwt from './jwt.js';
 
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
-const db = require('./db');
-
-// Dev-only fallback so this runs out of the box; set a real JWT_SECRET in
-// production deployments.
-const JWT_SECRET = process.env.JWT_SECRET || 'dev-insecure-secret-change-me';
-const TOKEN_TTL = '30d';
-
-function publicUser(row) {
-  return { id: row.id, email: row.email, displayName: row.display_name };
+function publicUser(user) {
+  return { id: user.id, email: user.email, displayName: user.displayName };
 }
 
-function issueToken(user) {
-  return jwt.sign({ sub: user.id }, JWT_SECRET, { expiresIn: TOKEN_TTL });
-}
-
-function register(req, res) {
-  const { email, password, displayName } = req.body || {};
+async function register(c) {
+  const body = await c.req.json().catch(() => ({}));
+  const { email, password, displayName } = body;
   if (!email || !password || !displayName) {
-    return res.status(400).json({ error: 'email, password, and displayName are required' });
+    return c.json({ error: 'email, password, and displayName are required' }, 400);
   }
   if (String(password).length < 6) {
-    return res.status(400).json({ error: 'password must be at least 6 characters' });
+    return c.json({ error: 'password must be at least 6 characters' }, 400);
   }
 
-  const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(email);
+  const existing = await store.getUserByEmail(email);
   if (existing) {
-    return res.status(409).json({ error: 'an account with this email already exists' });
+    return c.json({ error: 'an account with this email already exists' }, 409);
   }
 
-  const passwordHash = bcrypt.hashSync(password, 10);
-  const info = db
-    .prepare('INSERT INTO users (email, password_hash, display_name) VALUES (?, ?, ?)')
-    .run(email, passwordHash, displayName);
-  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(info.lastInsertRowid);
+  const passwordHash = await Bun.password.hash(password);
+  const user = await store.createUser({ email, passwordHash, displayName });
 
-  res.status(201).json({ token: issueToken(user), user: publicUser(user) });
+  return c.json({ token: jwt.sign({ sub: user.id }), user: publicUser(user) }, 201);
 }
 
-function login(req, res) {
-  const { email, password } = req.body || {};
+async function login(c) {
+  const body = await c.req.json().catch(() => ({}));
+  const { email, password } = body;
   if (!email || !password) {
-    return res.status(400).json({ error: 'email and password are required' });
+    return c.json({ error: 'email and password are required' }, 400);
   }
 
-  const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
-  if (!user || !bcrypt.compareSync(password, user.password_hash)) {
-    return res.status(401).json({ error: 'invalid email or password' });
+  const user = await store.getUserByEmail(email);
+  if (!user || !(await Bun.password.verify(password, user.passwordHash))) {
+    return c.json({ error: 'invalid email or password' }, 401);
   }
 
-  res.json({ token: issueToken(user), user: publicUser(user) });
+  return c.json({ token: jwt.sign({ sub: user.id }), user: publicUser(user) });
 }
 
-function requireAuth(req, res, next) {
-  const header = req.headers.authorization || '';
+async function requireAuth(c, next) {
+  const header = c.req.header('Authorization') || '';
   const token = header.startsWith('Bearer ') ? header.slice(7) : null;
-  if (!token) return res.status(401).json({ error: 'missing bearer token' });
+  if (!token) return c.json({ error: 'missing bearer token' }, 401);
 
   try {
-    const payload = jwt.verify(token, JWT_SECRET);
-    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(payload.sub);
-    if (!user) return res.status(401).json({ error: 'user no longer exists' });
-    req.user = user;
-    next();
+    const payload = jwt.verify(token);
+    const user = await store.getUserById(payload.sub);
+    if (!user) return c.json({ error: 'user no longer exists' }, 401);
+    c.set('user', user);
+    await next();
   } catch {
-    return res.status(401).json({ error: 'invalid or expired token' });
+    return c.json({ error: 'invalid or expired token' }, 401);
   }
 }
 
-module.exports = { register, login, requireAuth, publicUser };
+export { register, login, requireAuth, publicUser };

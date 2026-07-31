@@ -1,29 +1,23 @@
-'use strict';
+import { Hono } from 'hono';
+import * as store from './redis.js';
+import { requireAuth } from './auth.js';
 
-const express = require('express');
-const db = require('./db');
-const { requireAuth } = require('./auth');
-
-const router = express.Router();
+const earnings = new Hono();
 
 // Auth required: aggregate creator earnings summary. Per-listing detail
 // lives in GET /api/listings/mine -- this is just the dashboard rollup.
-router.get('/mine', requireAuth, (req, res) => {
-  const row = db.prepare(`
-    SELECT
-      COUNT(DISTINCT l.id) AS listing_count,
-      COALESCE(COUNT(p.id), 0) AS total_sales,
-      COALESCE(SUM(p.creator_earning_cents), 0) AS total_earnings_cents
-    FROM listings l
-    LEFT JOIN purchases p ON p.listing_id = l.id
-    WHERE l.creator_id = ?
-  `).get(req.user.id);
+earnings.get('/mine', requireAuth, async (c) => {
+  const user = c.get('user');
+  const [stats, listings] = await Promise.all([
+    store.creatorStats(user.id),
+    store.listListingsByCreator(user.id),
+  ]);
 
-  res.json({
-    listingCount: row.listing_count,
-    totalSales: row.total_sales,
-    totalEarningsCents: row.total_earnings_cents,
+  return c.json({
+    listingCount: listings.length,
+    totalSales: stats.sales,
+    totalEarningsCents: stats.earningsCents,
   });
 });
 
-module.exports = router;
+export default earnings;
