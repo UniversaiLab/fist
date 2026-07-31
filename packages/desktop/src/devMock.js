@@ -144,6 +144,8 @@ export function installDevMock() {
       return { ms: 40 + Math.round(Math.random() * 500) };
     },
     addLink: async () => { throw new Error('Not available in preview mode'); },
+    addFile: async () => ({ canceled: true }),
+    exportFist: async () => { throw new Error('Not available in preview mode'); },
     addSubscription: async () => { throw new Error('Not available in preview mode'); },
     addCustomConfig: async (fields) => {
       await new Promise((r) => setTimeout(r, 300));

@@ -14,6 +14,8 @@ contextBridge.exposeInMainWorld('soul', {
 
   listProfiles: () => ipcRenderer.invoke('profiles:list'),
   addLink: (link) => ipcRenderer.invoke('profiles:addLink', link),
+  addFile: () => ipcRenderer.invoke('profiles:addFile'),
+  exportFist: (ids) => ipcRenderer.invoke('profiles:exportFist', ids),
   deleteProfile: (id) => ipcRenderer.invoke('profiles:delete', id),
   renameProfile: (id, name) => ipcRenderer.invoke('profiles:rename', { id, name }),
   updateProfile: (id, link) => ipcRenderer.invoke('profiles:update', { id, link }),

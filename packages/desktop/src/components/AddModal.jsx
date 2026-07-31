@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import CustomConfigForm from './CustomConfigForm.jsx';
 
-export default function AddModal({ onClose, onAddLink, onAddSubscription, onAddCustom }) {
+export default function AddModal({ onClose, onAddLink, onAddFile, onAddSubscription, onAddCustom }) {
   const [tab, setTab] = useState('link');
   const [value, setValue] = useState('');
   const [error, setError] = useState('');
@@ -24,6 +24,18 @@ export default function AddModal({ onClose, onAddLink, onAddSubscription, onAddC
     }
   }
 
+  async function handleImportFile() {
+    setError('');
+    setLoading(true);
+    try {
+      await onAddFile();
+    } catch (err) {
+      setError(err.message || 'An error occurred');
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
     <div className="overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className={`modal ${tab === 'custom' ? 'wide' : ''}`}>
@@ -31,7 +43,7 @@ export default function AddModal({ onClose, onAddLink, onAddSubscription, onAddC
         <p className="hint">
           {tab === 'custom'
             ? 'Enter all config settings manually.'
-            : 'Enter a vmess://, vless://, trojan://, ss://, hysteria2://, or tg://proxy link, or a subscription address.'}
+            : 'Enter a vmess://, vless://, trojan://, ss://, hysteria2://, or tg://proxy link, a .fist bundle, a pasted WireGuard config, or a subscription address.'}
         </p>
 
         <div className="tabs">
@@ -53,7 +65,7 @@ export default function AddModal({ onClose, onAddLink, onAddSubscription, onAddC
             {tab === 'link' ? (
               <textarea
                 className="mono"
-                placeholder="vmess://..."
+                placeholder="vmess://... or paste a WireGuard [Interface] config, or a .fist bundle"
                 value={value}
                 onChange={(e) => setValue(e.target.value)}
                 autoFocus
@@ -72,6 +84,11 @@ export default function AddModal({ onClose, onAddLink, onAddSubscription, onAddC
 
             <div className="row">
               <button className="btn" onClick={onClose}>Cancel</button>
+              {tab === 'link' && (
+                <button className="btn" onClick={handleImportFile} disabled={loading}>
+                  Import File…
+                </button>
+              )}
               <button className="btn primary" onClick={handleSubmit} disabled={loading || !value.trim()}>
                 {loading ? 'Adding…' : 'Add'}
               </button>

@@ -4,8 +4,8 @@ const path = require('path');
 const fs = require('fs');
 
 const {
-  parseLink, parseMany, newId, parseSubscriptionUserinfo, buildCustomProfile,
-  buildSingboxConfig, DEFAULT_SETTINGS,
+  parseLink, parseMany, parseConfigText, newId, parseSubscriptionUserinfo, buildCustomProfile,
+  buildSingboxConfig, encodeFistBundle, DEFAULT_SETTINGS,
 } = require('@soul-connection/core-logic');
 const { SingBoxProcess } = require('./lib/singboxProcess.cjs');
 const systemProxy = require('./lib/systemProxy.cjs');
@@ -664,26 +664,80 @@ ipcMain.handle('settings:setMode', async (_e, mode) => {
   if (mode !== 'proxy' && mode !== 'tun') throw new Error('Invalid mode');
   if (connectionState !== 'disconnected') throw new Error('Disconnect first');
 
+  // Persist the requested mode *before* possibly relaunching elevated --
+  // relaunchElevated calls app.exit() as soon as the elevated instance is
+  // confirmed launched, which aborts this handler mid-flight. Setting the
+  // store first means the new elevated instance actually boots into 'tun'
+  // instead of silently coming back up in 'proxy' and making the click look
+  // like it did nothing.
+  store.set('connectionMode', mode);
+
   if (mode === 'tun' && !(await isElevated())) {
     notify('Relaunching with Administrator Access', 'Full Tunnel mode requires administrator/root access. The app will reopen shortly…');
     const relaunched = await relaunchElevated(app);
     if (!relaunched) {
+      store.set('connectionMode', 'proxy');
       throw new Error('You must approve the administrator/root access request to enable Full Tunnel mode');
     }
     return mode; // unreachable in practice -- app.exit() fires inside relaunchElevated
   }
 
-  store.set('connectionMode', mode);
   return mode;
 });
 
 ipcMain.handle('profiles:addLink', (_e, link) => {
-  const profile = parseLink(link);
-  if (!profile) throw new Error('Invalid or unsupported config');
+  // parseConfigText covers a single share link (the common case), a .fist
+  // bundle (possibly many profiles), or a pasted WireGuard .conf -- all
+  // come back as an array so this one handler covers all three.
+  const parsed = parseConfigText(link);
+  if (!parsed.length) throw new Error('Invalid or unsupported config');
   const profiles = store.get('profiles', []);
-  profiles.push(profile);
+  profiles.push(...parsed);
   store.set('profiles', profiles);
-  return profile;
+  return parsed.length === 1 ? parsed[0] : parsed;
+});
+
+ipcMain.handle('profiles:addFile', async (_e) => {
+  const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow, {
+    title: 'Import Config File',
+    filters: [
+      { name: 'Supported configs', extensions: ['fist', 'conf', 'txt'] },
+      { name: 'All files', extensions: ['*'] },
+    ],
+    properties: ['openFile'],
+  });
+  if (canceled || !filePaths.length) return { canceled: true };
+
+  let text;
+  try {
+    text = fs.readFileSync(filePaths[0], 'utf8');
+  } catch {
+    throw new Error('Could not read the selected file');
+  }
+
+  const parsed = parseConfigText(text);
+  if (!parsed.length) throw new Error('No supported configs found in that file');
+
+  const profiles = store.get('profiles', []);
+  profiles.push(...parsed);
+  store.set('profiles', profiles);
+  return { canceled: false, profiles: parsed };
+});
+
+ipcMain.handle('profiles:exportFist', async (_e, ids) => {
+  const all = store.get('profiles', []);
+  const selected = Array.isArray(ids) && ids.length ? all.filter((p) => ids.includes(p.id)) : all;
+  if (!selected.length) throw new Error('No configs to export');
+
+  const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
+    title: 'Export as .fist',
+    defaultPath: `fist-export-${new Date().toISOString().slice(0, 10)}.fist`,
+    filters: [{ name: 'FIST bundle', extensions: ['fist'] }],
+  });
+  if (canceled || !filePath) return { canceled: true };
+
+  fs.writeFileSync(filePath, encodeFistBundle(selected));
+  return { canceled: false, filePath, count: selected.length };
 });
 
 ipcMain.handle('profiles:addCustom', (_e, fields) => {

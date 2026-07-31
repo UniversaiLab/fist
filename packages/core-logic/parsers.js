@@ -1,5 +1,7 @@
 'use strict';
 
+const { encodeFistBundle, decodeFistBundle, isFistBundle } = require('./fistFormat.js');
+
 function b64decode(s) {
   s = s.replace(/-/g, '+').replace(/_/g, '/').replace(/\s+/g, '');
   while (s.length % 4) s += '=';
@@ -230,6 +232,50 @@ function parseMtproto(link) {
   return p;
 }
 
+// WireGuard has no share-link scheme in real-world use -- every client
+// (including the official ones) distributes configs as a wg-quick .conf
+// INI file, so that's what we parse here rather than inventing a URI.
+function parseWireguardConf(text) {
+  const sections = {};
+  let current = null;
+  for (const rawLine of String(text || '').split(/\r?\n/)) {
+    const line = rawLine.replace(/#.*$/, '').trim();
+    if (!line) continue;
+    const sectionMatch = line.match(/^\[(\w+)\]$/i);
+    if (sectionMatch) {
+      current = sectionMatch[1].toLowerCase();
+      sections[current] = sections[current] || {};
+      continue;
+    }
+    if (!current) continue;
+    const eq = line.indexOf('=');
+    if (eq < 0) continue;
+    const key = line.slice(0, eq).trim().toLowerCase();
+    const value = line.slice(eq + 1).trim();
+    sections[current][key] = value;
+  }
+
+  const iface = sections.interface;
+  const peer = sections.peer;
+  if (!iface || !peer || !iface.privatekey || !peer.publickey || !peer.endpoint) return null;
+
+  const endpointMatch = peer.endpoint.match(/^\[?([^\]]+)\]?:(\d+)$/);
+  if (!endpointMatch) return null;
+
+  const p = baseProfile('wireguard', 'wireguard-conf');
+  p.address = endpointMatch[1];
+  p.port = Number(endpointMatch[2]);
+  p.privateKey = iface.privatekey;
+  p.localAddress = (iface.address || '').split(',').map((s) => s.trim()).filter(Boolean);
+  p.dns = iface.dns || '';
+  p.peerPublicKey = peer.publickey;
+  p.presharedKey = peer.presharedkey || '';
+  p.allowedIps = (peer.allowedips || '0.0.0.0/0,::/0').split(',').map((s) => s.trim()).filter(Boolean);
+  p.keepalive = peer.persistentkeepalive ? Number(peer.persistentkeepalive) : undefined;
+  p.name = `${p.address}:${p.port}`;
+  return p;
+}
+
 function parseLink(link) {
   link = String(link || '').trim();
   if (!link) return null;
@@ -245,6 +291,23 @@ function parseLink(link) {
     return null;
   }
   return null;
+}
+
+// Smart multi-format entry point used for both pasted text and imported
+// files: a .fist bundle (possibly many profiles), a WireGuard .conf (one
+// profile), or ordinary share link(s) (one per line) all come through here
+// and always come back as an array.
+function parseConfigText(text) {
+  const trimmed = String(text || '').trim();
+  if (!trimmed) return [];
+  if (isFistBundle(trimmed)) {
+    return decodeFistBundle(trimmed, baseProfile);
+  }
+  if (/^\[interface\]/im.test(trimmed)) {
+    const p = parseWireguardConf(trimmed);
+    return p ? [p] : [];
+  }
+  return parseMany(trimmed);
 }
 
 // Parse a block of text: multiple share links, or a base64-encoded
@@ -491,6 +554,7 @@ function buildCustomProfile(fields) {
 }
 
 module.exports = {
-  parseLink, parseMany, newId, parseSubscriptionUserinfo,
+  parseLink, parseMany, parseConfigText, parseWireguardConf, newId, parseSubscriptionUserinfo,
   buildLink, buildCustomProfile,
+  encodeFistBundle: (profiles) => encodeFistBundle(profiles, baseProfile),
 };
