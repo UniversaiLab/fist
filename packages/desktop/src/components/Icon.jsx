@@ -3,7 +3,8 @@ import {
   Settings, X, RefreshCw, Plus, Zap, ChevronDown, Search, Trash2, Folder, Signal,
   ArrowDown, ArrowUp, Wifi, Database, Shield, SlidersHorizontal, Info, Power, Star,
   Play, Pause, Square, Filter, Gauge, Target, Globe, History, Check, Pencil, Copy,
-  Radar, Minus, QrCode, Download, Eye, EyeOff, Store, Tag, Wallet, Upload,
+  Radar, Minus, QrCode, Download, Eye, EyeOff, Store, Tag, Wallet, Upload, Puzzle,
+  Code2,
 } from 'lucide-react';
 
 // Thin wrapper over lucide-react so every call site keeps using
@@ -51,6 +52,8 @@ const ICONS = {
   tag: Tag,
   wallet: Wallet,
   upload: Upload,
+  extension: Puzzle,
+  code: Code2,
 };
 
 export default function Icon({ name, size = 16, strokeWidth = 2, className = '' }) {

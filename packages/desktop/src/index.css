@@ -1112,6 +1112,34 @@ button:disabled { cursor: default; }
 .modal .field { margin-bottom: 10px; }
 .modal .field:last-of-type { margin-bottom: 0; }
 
+.engine-picker { margin-top: 12px; }
+.engine-picker p.hint { margin: 0 0 8px; }
+.engine-picker-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+.engine-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  text-align: left;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 9px 11px;
+  color: var(--text);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.engine-option:hover:not(:disabled) { border-color: var(--signal-dim); background: rgba(255, 255, 255, 0.04); }
+.engine-option:disabled { opacity: 0.6; cursor: default; }
+.engine-option .icon { flex-shrink: 0; margin-top: 2px; color: var(--signal-dim); }
+.engine-option-name { display: block; font-size: 12.5px; font-weight: 600; }
+.engine-option-hint { display: block; font-size: 11px; color: var(--text-faint); margin-top: 2px; }
+
 .modal.wide {
   width: min(640px, calc(100vw - 80px));
   max-height: calc(100vh - 64px);

@@ -275,6 +275,28 @@ function parseSshJson(text) {
   return sshProfileFromObject(obj, `npvt-ssh-json:${text.slice(0, 40)}`);
 }
 
+// Plug-and-play fallback: the user explicitly chose "run this as a raw
+// sing-box outbound" for a config none of our parsers recognized. Only
+// reached through that explicit choice (see electron/main.cjs's
+// profiles:addWithEngine) -- never auto-detected, since silently treating
+// arbitrary JSON as a valid outbound would be more surprising than helpful.
+function parseRawOutbound(text) {
+  let obj;
+  try {
+    obj = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  if (!obj || typeof obj !== 'object' || typeof obj.type !== 'string') return null;
+  const p = baseProfile('raw', 'raw-outbound');
+  p.engine = 'sing-box';
+  p.rawOutbound = obj;
+  p.address = typeof obj.server === 'string' ? obj.server : '';
+  p.port = Number(obj.server_port) || 0;
+  p.name = `${obj.type}${p.address ? ' · ' + p.address : ''}`;
+  return p;
+}
+
 // WireGuard has no share-link scheme in real-world use -- every client
 // (including the official ones) distributes configs as a wg-quick .conf
 // INI file, so that's what we parse here rather than inventing a URI.
@@ -623,7 +645,7 @@ function buildCustomProfile(fields) {
 }
 
 module.exports = {
-  parseLink, parseMany, parseConfigText, parseWireguardConf, newId, parseSubscriptionUserinfo,
+  parseLink, parseMany, parseConfigText, parseWireguardConf, parseRawOutbound, newId, parseSubscriptionUserinfo,
   buildLink, buildCustomProfile,
   encodeFistBundle: (profiles) => encodeFistBundle(profiles, baseProfile),
 };

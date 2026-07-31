@@ -1,15 +1,28 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import CustomConfigForm from './CustomConfigForm.jsx';
+import Icon from './Icon.jsx';
 
-export default function AddModal({ onClose, onAddLink, onAddFile, onAddSubscription, onAddCustom }) {
+export default function AddModal({ onClose, onAddLink, onAddFile, onAddSubscription, onAddCustom, onAddWithEngine }) {
   const [tab, setTab] = useState('link');
   const [value, setValue] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  // Plug-and-play: once a plain parse fails, offer to run the pasted text
+  // through an explicitly-chosen engine instead -- our own sing-box (raw
+  // outbound JSON) or an installed extension -- rather than just dead-ending
+  // on "unsupported format".
+  const [offerEngines, setOfferEngines] = useState(false);
+  const [extensions, setExtensions] = useState([]);
+  const [engineBusy, setEngineBusy] = useState(false);
+
+  useEffect(() => {
+    window.soul.listExtensions?.().then(setExtensions).catch(() => setExtensions([]));
+  }, []);
 
   async function handleSubmit() {
     if (!value.trim()) return;
     setError('');
+    setOfferEngines(false);
     setLoading(true);
     try {
       if (tab === 'link') {
@@ -19,8 +32,22 @@ export default function AddModal({ onClose, onAddLink, onAddFile, onAddSubscript
       }
     } catch (err) {
       setError(err.message || 'An error occurred');
+      if (tab === 'link') setOfferEngines(true);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handlePickEngine(engineId) {
+    if (engineBusy) return;
+    setEngineBusy(true);
+    setError('');
+    try {
+      await onAddWithEngine(value.trim(), engineId);
+    } catch (err) {
+      setError(err.message || 'That engine could not handle this config either');
+    } finally {
+      setEngineBusy(false);
     }
   }
 
@@ -81,6 +108,46 @@ export default function AddModal({ onClose, onAddLink, onAddFile, onAddSubscript
             )}
 
             {error && <div className="error-msg">{error}</div>}
+
+            {tab === 'link' && offerEngines && (
+              <div className="engine-picker">
+                <p className="hint">
+                  Not a format FIST recognizes. Pick an engine to run it instead:
+                </p>
+                <div className="engine-picker-list">
+                  <button
+                    className="engine-option"
+                    disabled={engineBusy}
+                    onClick={() => handlePickEngine('sing-box')}
+                  >
+                    <Icon name="code" size={15} />
+                    <span>
+                      <span className="engine-option-name">Raw sing-box outbound (JSON)</span>
+                      <span className="engine-option-hint">Paste sing-box's own outbound JSON shape (socks, tuic, naive, …) and run it as-is</span>
+                    </span>
+                  </button>
+                  {extensions.map((ext) => (
+                    <button
+                      key={ext.id}
+                      className="engine-option"
+                      disabled={engineBusy}
+                      onClick={() => handlePickEngine(ext.id)}
+                    >
+                      <Icon name="extension" size={15} />
+                      <span>
+                        <span className="engine-option-name">{ext.name}</span>
+                        {ext.description && <span className="engine-option-hint">{ext.description}</span>}
+                      </span>
+                    </button>
+                  ))}
+                  {extensions.length === 0 && (
+                    <p className="hint">
+                      No extensions installed yet. Add one in Settings → Extensions.
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
 
             <div className="row">
               <button className="btn" onClick={onClose}>Cancel</button>

@@ -1,0 +1,7 @@
+{
+  "id": "demo-engine",
+  "name": "Demo TCP Forward Engine",
+  "version": "1.0.0",
+  "description": "Reference extension for FIST's plugin system. Parses demo-tcp://host:port#name links and, on connect, opens a real local TCP forwarder to that host:port -- enough to prove the extension contract end to end without being a full VPN implementation.",
+  "entry": "index.js"
+}

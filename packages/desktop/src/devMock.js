@@ -145,8 +145,12 @@ export function installDevMock() {
     },
     addLink: async () => { throw new Error('Not available in preview mode'); },
     addFile: async () => ({ canceled: true }),
+    addWithEngine: async () => { throw new Error('Not available in preview mode'); },
     exportFist: async () => { throw new Error('Not available in preview mode'); },
     addSubscription: async () => { throw new Error('Not available in preview mode'); },
+    listExtensions: async () => [],
+    installExtension: async () => ({ canceled: true }),
+    removeExtension: async () => [],
     addCustomConfig: async (fields) => {
       await new Promise((r) => setTimeout(r, 300));
       if (!fields.address?.trim()) throw new Error('Enter the server address');

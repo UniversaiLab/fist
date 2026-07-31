@@ -129,6 +129,16 @@ function buildOutbound(p) {
       // WireGuard isn't a regular sing-box "outbound" -- see buildWireguardEndpoint
       // and its use in buildSingboxConfig below.
       throw new Error('WireGuard profiles are built as an endpoint, not an outbound.');
+    case 'raw':
+      // Plug-and-play escape hatch for any protocol sing-box supports natively
+      // that we haven't hand-built a parser/form for (socks, tuic, naive,
+      // shadowtls, anytls, ...): the user pastes sing-box's own outbound JSON
+      // shape directly and we run it as-is, just forcing the tag so routing/
+      // stats still line up with everything else.
+      if (!p.rawOutbound || typeof p.rawOutbound !== 'object') {
+        throw new Error('Raw profile is missing its outbound JSON.');
+      }
+      return { ...p.rawOutbound, tag: 'proxy' };
     default:
       throw new Error(`Unsupported protocol: ${p.protocol}`);
   }
