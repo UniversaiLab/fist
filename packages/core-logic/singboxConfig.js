@@ -95,6 +95,18 @@ function buildOutbound(p) {
         method: p.method,
         password: p.password,
       };
+    case 'ssh':
+      // sing-box has a native `ssh` outbound (confirmed via `sing-box
+      // check`), so a plain SSH-tunneled proxy runs through the same
+      // engine as everything else -- no separate ssh2/socks stack needed.
+      return {
+        type: 'ssh',
+        tag: 'proxy',
+        server: p.address,
+        server_port: p.port,
+        user: p.username,
+        password: p.password,
+      };
     case 'hysteria2': {
       const out = {
         type: 'hysteria2',

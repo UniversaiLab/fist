@@ -232,6 +232,49 @@ function parseMtproto(link) {
   return p;
 }
 
+// npvt-ssh:// is another app's share-link format for a plain SSH-tunneled
+// proxy: npvt-ssh://<base64(JSON)>, e.g.
+//   {"sshConfigType":"SSH-Direct","remarks":"My Server","sshHost":"1.2.3.4",
+//    "sshPort":22,"sshUsername":"user","sshPassword":"pass",
+//    "dnsTTMode":"UDP","udpgwTransparentDNS":true}
+// sing-box has its own native `ssh` outbound, so this profile tunnels
+// through our existing engine same as everything else -- no separate
+// ssh2/socks stack needed.
+function sshProfileFromObject(obj, link) {
+  if (!obj || !obj.sshHost || !obj.sshUsername) return null;
+  const p = baseProfile('ssh', link);
+  p.address = String(obj.sshHost);
+  p.port = Number(obj.sshPort) || 22;
+  p.username = String(obj.sshUsername);
+  p.password = obj.sshPassword != null ? String(obj.sshPassword) : '';
+  p.name = obj.remarks || `${p.address}:${p.port}`;
+  return p;
+}
+
+function parseNpvtSsh(link) {
+  if (!link.startsWith('npvt-ssh://')) return null;
+  let obj;
+  try {
+    obj = JSON.parse(b64decode(link.slice('npvt-ssh://'.length)));
+  } catch {
+    return null;
+  }
+  return sshProfileFromObject(obj, link);
+}
+
+// The competing app this format comes from also accepts the raw JSON pasted
+// directly (no npvt-ssh:// wrapper, no base64) -- matched here by shape
+// (sshHost/sshUsername keys) rather than by any scheme prefix.
+function parseSshJson(text) {
+  let obj;
+  try {
+    obj = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  return sshProfileFromObject(obj, `npvt-ssh-json:${text.slice(0, 40)}`);
+}
+
 // WireGuard has no share-link scheme in real-world use -- every client
 // (including the official ones) distributes configs as a wg-quick .conf
 // INI file, so that's what we parse here rather than inventing a URI.
@@ -287,6 +330,7 @@ function parseLink(link) {
     if (link.startsWith('hysteria2://') || link.startsWith('hy2://')) return parseHysteria2(link);
     if (link.startsWith('mtproto://')) return parseMtproto(link);
     if (link.startsWith('tg://proxy') || /^https:\/\/t\.me\/proxy/i.test(link)) return parseMtproto(link);
+    if (link.startsWith('npvt-ssh://')) return parseNpvtSsh(link);
   } catch {
     return null;
   }
@@ -305,6 +349,10 @@ function parseConfigText(text) {
   }
   if (/^\[interface\]/im.test(trimmed)) {
     const p = parseWireguardConf(trimmed);
+    return p ? [p] : [];
+  }
+  if (trimmed.startsWith('{')) {
+    const p = parseSshJson(trimmed);
     return p ? [p] : [];
   }
   return parseMany(trimmed);
@@ -449,6 +497,18 @@ function buildMtprotoLink(p) {
   return `tg://proxy${qs(pairs)}#${name}`;
 }
 
+function buildNpvtSshLink(p) {
+  const obj = {
+    sshConfigType: 'SSH-Direct',
+    remarks: p.name || `${p.address}:${p.port}`,
+    sshHost: p.address,
+    sshPort: p.port,
+    sshUsername: p.username,
+    sshPassword: p.password,
+  };
+  return `npvt-ssh://${Buffer.from(JSON.stringify(obj), 'utf8').toString('base64')}`;
+}
+
 function buildLink(p) {
   switch (p.protocol) {
     case 'vmess': return buildVmessLink(p);
@@ -457,13 +517,14 @@ function buildLink(p) {
     case 'shadowsocks': return buildSsLink(p);
     case 'hysteria2': return buildHysteria2Link(p);
     case 'mtproto': return buildMtprotoLink(p);
+    case 'ssh': return buildNpvtSshLink(p);
     default: return null;
   }
 }
 
 // ---- Custom config: validate manual form input into a full profile ----
 
-const CUSTOM_PROTOCOLS = new Set(['vmess', 'vless', 'trojan', 'shadowsocks']);
+const CUSTOM_PROTOCOLS = new Set(['vmess', 'vless', 'trojan', 'shadowsocks', 'ssh']);
 const CUSTOM_NETWORKS = new Set(['tcp', 'ws', 'grpc', 'h2', 'http', 'kcp']);
 const CUSTOM_SECURITIES = new Set(['none', 'tls', 'reality']);
 const UUID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
@@ -544,6 +605,14 @@ function buildCustomProfile(fields) {
     if (!password) throw new Error('Enter a password');
     p.method = method;
     p.password = password;
+    p.network = 'tcp';
+    p.security = 'none';
+  }
+  if (protocol === 'ssh') {
+    const username = str(f.username, 256);
+    if (!username) throw new Error('Enter a username');
+    p.username = username;
+    p.password = str(f.password, 256);
     p.network = 'tcp';
     p.security = 'none';
   }

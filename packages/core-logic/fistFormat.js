@@ -17,7 +17,7 @@ const MAGIC = 'FIST1:';
 // the "compact" budget.
 const TYPE_CODES = {
   vmess: 'vm', vless: 'vl', trojan: 'tr', shadowsocks: 'ss',
-  hysteria2: 'hy', wireguard: 'wg', mtproto: 'mt',
+  hysteria2: 'hy', wireguard: 'wg', mtproto: 'mt', ssh: 'sh',
 };
 const TYPE_NAMES = Object.fromEntries(Object.entries(TYPE_CODES).map(([k, v]) => [v, k]));
 
@@ -113,6 +113,9 @@ function encodeProfile(p) {
     case 'mtproto':
       Object.assign(o, { sec: p.secret });
       break;
+    case 'ssh':
+      Object.assign(o, { u: p.username, pw: p.password });
+      break;
     default:
       throw new Error(`.fist cannot encode protocol: ${p.protocol}`);
   }
@@ -167,6 +170,10 @@ function decodeProfile(o, baseProfile) {
       break;
     case 'mtproto':
       p.secret = o.sec;
+      break;
+    case 'ssh':
+      p.username = o.u;
+      p.password = o.pw || '';
       break;
   }
   p.name = p.name || `${p.address}:${p.port}`;
