@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import DottedMap from 'dotted-map';
 import CoreLogic from '@soul-connection/core-logic';
-import { coordsFor } from '../utils/mapCoords.js';
+import { coordsFor, bboxFor } from '../utils/mapCoords.js';
 
 const { countryOf } = CoreLogic;
 
@@ -17,7 +17,7 @@ const IDLE_STATS = [
 ];
 
 // Computed once for the app's whole lifetime -- the world dot grid never
-// changes, only which pin is highlighted does, so there's no reason to pay
+// changes, only which dots are highlighted does, so there's no reason to pay
 // this cost (a few hundred ms) more than once per launch.
 let mapSingleton = null;
 function getMap() {
@@ -25,6 +25,34 @@ function getMap() {
     mapSingleton = new DottedMap({ height: 56, grid: 'diagonal' });
   }
   return mapSingleton;
+}
+
+// Which of the world map's own dots fall within a country's (approximate)
+// bounding box, so we can color in the actual region instead of dropping a
+// single marker on it. map.getPin({lat,lng}) snaps to the exact same grid
+// cell math the background dots were generated with, so sampling the bbox
+// and matching the resulting {x,y} keys against the real dot set lands
+// exactly on existing dots -- no separate polygon/geo data needed, and
+// off-land samples (ocean, etc.) simply match nothing and are ignored.
+// Memoized per ISO since it never changes for a given map instance.
+const highlightCache = new Map();
+function highlightedKeysForCountry(map, iso) {
+  if (highlightCache.has(iso)) return highlightCache.get(iso);
+  const bbox = bboxFor(iso);
+  const keys = new Set();
+  if (bbox) {
+    const latSpan = bbox.latMax - bbox.latMin;
+    const lngSpan = bbox.lngMax - bbox.lngMin;
+    const step = Math.max(0.5, Math.max(latSpan, lngSpan) / 40);
+    for (let lat = bbox.latMin; lat <= bbox.latMax; lat += step) {
+      for (let lng = bbox.lngMin; lng <= bbox.lngMax; lng += step) {
+        const pin = map.getPin({ lat, lng });
+        if (pin) keys.add(`${pin.x},${pin.y}`);
+      }
+    }
+  }
+  highlightCache.set(iso, keys);
+  return keys;
 }
 
 function useStatCycle(active) {
@@ -45,23 +73,22 @@ export default function MapBackground({ connectionState, activeProfile }) {
   const { width, height } = map.image;
 
   const connected = connectionState === 'connected';
-  const busy = connectionState === 'connecting' || connectionState === 'disconnecting';
   const idle = connectionState === 'disconnected';
 
   // Only ever points at the actual target server's real detected location
   // (best-effort, name-based -- see core-logic/geo.js) -- no idle-state
   // random-city highlighting, so the map stays quiet until there's a real
   // location to show.
-  const targetCoords = useMemo(() => {
+  const targetCountry = useMemo(() => {
     if (idle || !activeProfile) return null;
     const geo = countryOf(activeProfile);
-    const coords = coordsFor(geo?.iso);
-    return coords ? { ...coords, iso: geo.iso, label: geo.label } : null;
+    if (!geo || !coordsFor(geo.iso)) return null;
+    return geo;
   }, [idle, activeProfile]);
 
-  const pin = useMemo(
-    () => (targetCoords ? map.getPin({ lat: targetCoords.lat, lng: targetCoords.lng }) : null),
-    [map, targetCoords]
+  const highlightKeys = useMemo(
+    () => (targetCountry ? highlightedKeysForCountry(map, targetCountry.iso) : null),
+    [map, targetCountry]
   );
 
   const statText = useStatCycle(idle);
@@ -69,16 +96,18 @@ export default function MapBackground({ connectionState, activeProfile }) {
   return (
     <div className={`map-bg ${connectionState}`} aria-hidden="true">
       <svg className="map-bg-svg" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="xMidYMid slice">
-        {points.map((p, i) => (
-          <circle key={i} cx={p.x} cy={p.y} r={0.32} className="map-dot" />
-        ))}
-        {pin && (
-          <g className={`map-pin ${connected ? 'connected' : 'busy'}`}>
-            <circle cx={pin.x} cy={pin.y} r={3.2} className="map-pin-wave map-pin-wave-2" />
-            <circle cx={pin.x} cy={pin.y} r={2.2} className="map-pin-wave" />
-            <circle cx={pin.x} cy={pin.y} r={0.75} className="map-pin-core" />
-          </g>
-        )}
+        {points.map((p, i) => {
+          const lit = highlightKeys?.has(`${p.x},${p.y}`);
+          return (
+            <circle
+              key={i}
+              cx={p.x}
+              cy={p.y}
+              r={lit ? 0.4 : 0.32}
+              className={`map-dot ${lit ? `highlight ${connected ? 'connected' : 'busy'}` : ''}`}
+            />
+          );
+        })}
       </svg>
 
       {idle && (
@@ -88,9 +117,9 @@ export default function MapBackground({ connectionState, activeProfile }) {
         </div>
       )}
 
-      {!idle && targetCoords?.label && (
+      {!idle && targetCountry?.label && (
         <div className="map-loc-line mono">
-          {connected ? 'CONNECTED ·' : 'ROUTING ·'} {targetCoords.label.toUpperCase()}
+          {connected ? 'CONNECTED ·' : 'ROUTING ·'} {targetCountry.label.toUpperCase()}
         </div>
       )}
     </div>
