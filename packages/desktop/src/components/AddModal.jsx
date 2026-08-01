@@ -70,7 +70,7 @@ export default function AddModal({ onClose, onAddLink, onAddFile, onAddSubscript
         <p className="hint">
           {tab === 'custom'
             ? 'Enter all config settings manually.'
-            : 'Enter a vmess://, vless://, trojan://, ss://, hysteria2://, npvt-ssh://, or tg://proxy link, a .fist bundle, a pasted WireGuard config or SSH JSON, or a subscription address.'}
+            : 'Enter a vmess://, vless://, trojan://, ss://, hysteria2://, npvt-ssh://, or tg://proxy link, a .fist bundle, a pasted WireGuard config, SSH JSON, an `ssh -J`/`sshuttle` jump-chain command, or a subscription address.'}
         </p>
 
         <div className="tabs">

@@ -239,7 +239,24 @@ function parseMtproto(link) {
 //    "dnsTTMode":"UDP","udpgwTransparentDNS":true}
 // sing-box has its own native `ssh` outbound, so this profile tunnels
 // through our existing engine same as everything else -- no separate
-// ssh2/socks stack needed.
+// ssh2/socks stack needed. `sshPrivateKey` and `jumps` are our own
+// extensions on top of the competitor's format (not part of their spec) --
+// jumps chains through one or more bastion hosts first, entry hop first,
+// mirroring `ssh -J hop1,hop2,...`; see singboxConfig.js's buildSshJumpOutbounds.
+function jumpsFromObject(raw) {
+  if (!Array.isArray(raw)) return undefined;
+  const jumps = raw
+    .map((j) => ({
+      address: String(j.host || j.address || ''),
+      port: Number(j.port) || 22,
+      username: String(j.username || j.user || ''),
+      password: j.password != null ? String(j.password) : '',
+      privateKey: j.privateKey ? String(j.privateKey) : '',
+    }))
+    .filter((j) => j.address && j.username);
+  return jumps.length ? jumps : undefined;
+}
+
 function sshProfileFromObject(obj, link) {
   if (!obj || !obj.sshHost || !obj.sshUsername) return null;
   const p = baseProfile('ssh', link);
@@ -247,7 +264,10 @@ function sshProfileFromObject(obj, link) {
   p.port = Number(obj.sshPort) || 22;
   p.username = String(obj.sshUsername);
   p.password = obj.sshPassword != null ? String(obj.sshPassword) : '';
-  p.name = obj.remarks || `${p.address}:${p.port}`;
+  p.privateKey = obj.sshPrivateKey != null ? String(obj.sshPrivateKey) : '';
+  const jumps = jumpsFromObject(obj.jumps);
+  if (jumps) p.jumps = jumps;
+  p.name = obj.remarks || (jumps ? `${p.address} (via ${jumps.map((j) => j.address).join(' → ')})` : `${p.address}:${p.port}`);
   return p;
 }
 
@@ -273,6 +293,123 @@ function parseSshJson(text) {
     return null;
   }
   return sshProfileFromObject(obj, `npvt-ssh-json:${text.slice(0, 40)}`);
+}
+
+// Pasted `ssh -J ...` / `sshuttle ... --ssh-cmd 'ssh -J ...'` command lines --
+// the exact commands a user would run by hand or with sshuttle to chain
+// through one or more jump/bastion hosts before reaching the real target.
+// Real commands like these never carry passwords in plain sight (key-based
+// or interactive auth), so this only recovers host/port/username for each
+// hop -- the resulting profile needs a password or private key filled in
+// (via Custom / Edit) before it can actually connect.
+const SSH_FLAGS_WITH_VALUE = new Set([
+  '-p', '-D', '-i', '-o', '-l', '-L', '-R', '-F', '-w', '-J',
+  '-c', '-m', '-b', '-B', '-e', '-E', '-I', '-Q', '-S', '-W', '-y',
+]);
+
+function tokenizeShellish(str) {
+  const tokens = [];
+  const re = /'([^']*)'|"([^"]*)"|(\S+)/g;
+  let m;
+  while ((m = re.exec(str))) tokens.push(m[1] !== undefined ? m[1] : (m[2] !== undefined ? m[2] : m[3]));
+  return tokens;
+}
+
+function splitInlineFlag(token) {
+  const m = token.match(/^(-[A-Za-z])(.+)$/);
+  return m ? [m[1], m[2]] : [token, null];
+}
+
+function parseHostSpec(spec, defaultPort) {
+  const m = String(spec || '').match(/^(?:([^@]+)@)?([^@:]+)(?::(\d+))?$/);
+  if (!m || !m[2]) return null;
+  return { username: m[1] || '', address: m[2], port: m[3] ? Number(m[3]) : defaultPort };
+}
+
+// Scans already-tokenized ssh-command arguments for -J (jump chain) and -p
+// (port); `wantFinalHost` also looks for the trailing `[user@]host`
+// destination -- off for sshuttle's embedded --ssh-cmd fragment, which never
+// carries the final host itself (sshuttle supplies that via its own -r).
+function scanSshTokens(tokens, wantFinalHost) {
+  let jumpsSpec = null;
+  let port = null;
+  let finalHost = null;
+  for (let i = 0; i < tokens.length; i++) {
+    const [flag, inlineValue] = splitInlineFlag(tokens[i]);
+    if (flag === '-J') {
+      jumpsSpec = inlineValue != null ? inlineValue : tokens[++i];
+      continue;
+    }
+    if (flag === '-p') {
+      const v = inlineValue != null ? inlineValue : tokens[++i];
+      port = Number(v);
+      continue;
+    }
+    if (SSH_FLAGS_WITH_VALUE.has(flag) && inlineValue == null) {
+      i++; // skip this flag's separate-token value (-i keyfile, -o Option=x, ...)
+      continue;
+    }
+    if (tokens[i].startsWith('-')) continue;
+    if (tokens[i] === 'ssh' || tokens[i] === 'sshuttle') continue;
+    if (wantFinalHost) finalHost = tokens[i]; // last bare positional wins
+  }
+  return { jumpsSpec, port, finalHost };
+}
+
+function jumpsFromSpec(jumpsSpec) {
+  if (!jumpsSpec) return [];
+  return jumpsSpec.split(',')
+    .map((s) => parseHostSpec(s.trim(), 22))
+    .filter(Boolean)
+    .map((h) => ({ address: h.address, port: h.port, username: h.username, password: '', privateKey: '' }));
+}
+
+function parseSshJumpCommand(text) {
+  const trimmed = String(text || '').trim();
+  if (!/^(ssh|sshuttle)\b/.test(trimmed)) return null;
+
+  const tokens = tokenizeShellish(trimmed);
+  const isSshuttle = tokens[0] === 'sshuttle';
+
+  let jumpsSpec = null;
+  let port = null;
+  let finalSpec = null;
+
+  if (isSshuttle) {
+    const rIdx = tokens.indexOf('-r');
+    if (rIdx >= 0) finalSpec = tokens[rIdx + 1];
+    const cmdIdx = tokens.indexOf('--ssh-cmd');
+    const innerCmd = cmdIdx >= 0 ? tokens[cmdIdx + 1] : null;
+    if (innerCmd) {
+      const inner = scanSshTokens(tokenizeShellish(innerCmd), false);
+      jumpsSpec = inner.jumpsSpec;
+      port = inner.port;
+    }
+  } else {
+    const res = scanSshTokens(tokens, true);
+    jumpsSpec = res.jumpsSpec;
+    port = res.port;
+    finalSpec = res.finalHost;
+  }
+
+  if (!finalSpec) return null;
+  const final = parseHostSpec(finalSpec, port || 22);
+  if (!final || !final.username) return null;
+  if (port) final.port = port;
+
+  const jumps = jumpsFromSpec(jumpsSpec);
+
+  const p = baseProfile('ssh', `ssh-chain:${trimmed.slice(0, 60)}`);
+  p.address = final.address;
+  p.port = final.port;
+  p.username = final.username;
+  p.password = '';
+  p.privateKey = '';
+  if (jumps.length) p.jumps = jumps;
+  p.name = jumps.length
+    ? `${final.address} (via ${jumps.map((j) => j.address).join(' → ')})`
+    : final.address;
+  return p;
 }
 
 // Plug-and-play fallback: the user explicitly chose "run this as a raw
@@ -375,6 +512,10 @@ function parseConfigText(text) {
   }
   if (trimmed.startsWith('{')) {
     const p = parseSshJson(trimmed);
+    return p ? [p] : [];
+  }
+  if (/^(ssh|sshuttle)\b/.test(trimmed)) {
+    const p = parseSshJumpCommand(trimmed);
     return p ? [p] : [];
   }
   return parseMany(trimmed);
@@ -528,6 +669,15 @@ function buildNpvtSshLink(p) {
     sshUsername: p.username,
     sshPassword: p.password,
   };
+  // Our own extensions on top of the competitor's format -- omitted unless
+  // actually set, so a plain single-hop config's link stays identical to
+  // before.
+  if (p.privateKey) obj.sshPrivateKey = p.privateKey;
+  if (Array.isArray(p.jumps) && p.jumps.length) {
+    obj.jumps = p.jumps.map((j) => ({
+      host: j.address, port: j.port, username: j.username, password: j.password, privateKey: j.privateKey,
+    }));
+  }
   return `npvt-ssh://${Buffer.from(JSON.stringify(obj), 'utf8').toString('base64')}`;
 }
 
@@ -635,8 +785,26 @@ function buildCustomProfile(fields) {
     if (!username) throw new Error('Enter a username');
     p.username = username;
     p.password = str(f.password, 256);
+    p.privateKey = str(f.privateKey, 8192);
+    if (!p.password && !p.privateKey) throw new Error('Enter a password or a private key');
     p.network = 'tcp';
     p.security = 'none';
+
+    // Jump/bastion chain (mirrors `ssh -J hop1,hop2,... finalHost`): each hop
+    // needs its own address/username and either a password or a private key.
+    if (Array.isArray(f.jumps) && f.jumps.length) {
+      p.jumps = f.jumps.map((j, i) => {
+        const address = str(j.address, 253);
+        if (!address) throw new Error(`Jump host ${i + 1}: enter an address`);
+        const jUsername = str(j.username, 256);
+        if (!jUsername) throw new Error(`Jump host ${i + 1}: enter a username`);
+        const jPort = Number(j.port) || 22;
+        const jPassword = str(j.password, 256);
+        const jPrivateKey = str(j.privateKey, 8192);
+        if (!jPassword && !jPrivateKey) throw new Error(`Jump host ${i + 1}: enter a password or a private key`);
+        return { address, port: jPort, username: jUsername, password: jPassword, privateKey: jPrivateKey };
+      });
+    }
   }
 
   if (!p.name) p.name = `${p.address}:${p.port}`;
@@ -645,7 +813,7 @@ function buildCustomProfile(fields) {
 }
 
 module.exports = {
-  parseLink, parseMany, parseConfigText, parseWireguardConf, parseRawOutbound, newId, parseSubscriptionUserinfo,
+  parseLink, parseMany, parseConfigText, parseWireguardConf, parseRawOutbound, parseSshJumpCommand, newId, parseSubscriptionUserinfo,
   buildLink, buildCustomProfile,
   encodeFistBundle: (profiles) => encodeFistBundle(profiles, baseProfile),
 };

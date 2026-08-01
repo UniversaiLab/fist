@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
+import Icon from './Icon.jsx';
 
 const PROTOCOLS = [
   { value: 'vless', label: 'VLESS' },
   { value: 'vmess', label: 'VMess' },
   { value: 'trojan', label: 'Trojan' },
   { value: 'shadowsocks', label: 'Shadowsocks' },
+  { value: 'ssh', label: 'SSH' },
 ];
 
 const NETWORKS = [
@@ -72,7 +74,16 @@ const DEFAULT_FIELDS = {
   publicKey: '',
   shortId: '',
   spiderX: '',
+  username: '',
+  privateKey: '',
+  jumps: [],
 };
+
+// One jump/bastion host in an SSH chain: its own address/port/username and
+// either a password or a private key -- mirrors `ssh -J hop1,hop2,...`.
+function emptyJump() {
+  return { address: '', port: 22, username: '', password: '', privateKey: '' };
+}
 
 function Field({ label, children, hint, span }) {
   return (
@@ -119,6 +130,16 @@ export default function CustomConfigForm({ onSubmit, onCancel }) {
       if (!uuidRe.test(fields.uuid.trim())) return 'Invalid UUID (format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)';
     }
     if (isTrojanOrSs && !fields.password.trim()) return 'Enter a password';
+    if (protocol === 'ssh') {
+      if (!fields.username.trim()) return 'Enter a username';
+      if (!fields.password.trim() && !fields.privateKey.trim()) return 'Enter a password or a private key';
+      for (let i = 0; i < fields.jumps.length; i++) {
+        const j = fields.jumps[i];
+        if (!j.address.trim()) return `Jump host ${i + 1}: enter an address`;
+        if (!j.username.trim()) return `Jump host ${i + 1}: enter a username`;
+        if (!j.password.trim() && !j.privateKey.trim()) return `Jump host ${i + 1}: enter a password or a private key`;
+      }
+    }
     return '';
   }
 
@@ -205,9 +226,73 @@ export default function CustomConfigForm({ onSubmit, onCancel }) {
             </Field>
           </>
         )}
+        {protocol === 'ssh' && (
+          <>
+            <Field label="Username">
+              <input className="mono" value={fields.username} placeholder="root" onChange={(e) => set({ username: e.target.value })} />
+            </Field>
+            <Field label="Password">
+              <input className="mono" type="text" value={fields.password} placeholder="leave blank if using a private key" onChange={(e) => set({ password: e.target.value })} />
+            </Field>
+            <Field label="Private Key (optional, PEM)" span hint="Used instead of the password when set">
+              <textarea className="mono" rows={3} value={fields.privateKey} placeholder="-----BEGIN OPENSSH PRIVATE KEY-----" onChange={(e) => set({ privateKey: e.target.value })} />
+            </Field>
+          </>
+        )}
       </Group>
 
-      {protocol !== 'shadowsocks' && (
+      {protocol === 'ssh' && (
+        <Group title="Jump / Bastion Hosts (optional)">
+          <Field label="" span hint="Chain through one or more hosts first, mirroring `ssh -J hop1,hop2,... finalHost` -- entry hop first.">
+            <div className="jump-list">
+              {fields.jumps.map((jump, i) => (
+                <div className="jump-row" key={i}>
+                  <div className="jump-row-head">
+                    <span className="jump-row-title">Hop {i + 1}</span>
+                    <button
+                      type="button"
+                      className="icon-btn"
+                      title="Remove hop"
+                      onClick={() => set({ jumps: fields.jumps.filter((_, j) => j !== i) })}
+                    >
+                      <Icon name="close" size={13} />
+                    </button>
+                  </div>
+                  <div className="jump-row-grid">
+                    <input
+                      className="mono" placeholder="Host / IP" value={jump.address}
+                      onChange={(e) => set({ jumps: fields.jumps.map((j, k) => (k === i ? { ...j, address: e.target.value } : j)) })}
+                    />
+                    <input
+                      className="mono" type="number" min={1} max={65535} placeholder="Port" value={jump.port}
+                      onChange={(e) => set({ jumps: fields.jumps.map((j, k) => (k === i ? { ...j, port: e.target.value } : j)) })}
+                    />
+                    <input
+                      className="mono" placeholder="Username" value={jump.username}
+                      onChange={(e) => set({ jumps: fields.jumps.map((j, k) => (k === i ? { ...j, username: e.target.value } : j)) })}
+                    />
+                    <input
+                      className="mono" placeholder="Password" value={jump.password}
+                      onChange={(e) => set({ jumps: fields.jumps.map((j, k) => (k === i ? { ...j, password: e.target.value } : j)) })}
+                    />
+                  </div>
+                  <textarea
+                    className="mono jump-row-key" rows={2} placeholder="Private key (optional, PEM) -- used instead of the password when set"
+                    value={jump.privateKey}
+                    onChange={(e) => set({ jumps: fields.jumps.map((j, k) => (k === i ? { ...j, privateKey: e.target.value } : j)) })}
+                  />
+                </div>
+              ))}
+              <button type="button" className="btn icon-inline-btn jump-add-btn" onClick={() => set({ jumps: [...fields.jumps, emptyJump()] })}>
+                <Icon name="plus" size={13} />
+                Add Jump Host
+              </button>
+            </div>
+          </Field>
+        </Group>
+      )}
+
+      {protocol !== 'shadowsocks' && protocol !== 'ssh' && (
         <Group title="Transport">
           <Field label="Network Type">
             <select className="setting-select" value={network} onChange={(e) => set({ network: e.target.value, headerType: 'none' })}>
@@ -239,7 +324,7 @@ export default function CustomConfigForm({ onSubmit, onCancel }) {
         </Group>
       )}
 
-      {protocol !== 'shadowsocks' && (
+      {protocol !== 'shadowsocks' && protocol !== 'ssh' && (
         <Group title="Security">
           <Field label="Security">
             <select className="setting-select" value={security} onChange={(e) => set({ security: e.target.value })}>
