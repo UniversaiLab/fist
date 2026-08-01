@@ -21,6 +21,13 @@ marketplace prototype.
   JSON passthrough, or an installed extension (its own OS process) that can
   take full control of connecting and routing for that config. See
   [Engines / extensions](#engines--extensions) below.
+- **SSH jump/bastion chains** — connect through one or more intermediate SSH
+  hosts before reaching the real destination, same idea as `ssh -J
+  hop1,hop2,...` or `sshuttle --ssh-cmd 'ssh -J ...'`. Build a chain from
+  scratch in the Custom tab (add/remove hop rows, password or private-key
+  auth per hop), or paste a real `ssh -J ...` / `sshuttle ...` command
+  line to pull out the hosts automatically — those never carry passwords,
+  so fill in each hop's password/key afterward via Edit.
 - **Kill Switch** — blocks all outbound traffic if the tunnel drops
   unexpectedly, until you reconnect or turn it off.
 - **Subscriptions** — import a subscription URL, auto-update on an interval,
@@ -43,7 +50,7 @@ marketplace prototype.
 | Shadowsocks | native sing-box outbound |
 | Hysteria2 (`hysteria2://`, `hy2://`) | native sing-box outbound |
 | WireGuard (`.conf` import) | native sing-box endpoint |
-| SSH (`npvt-ssh://` links, or pasted SSH JSON) | native sing-box `ssh` outbound |
+| SSH (`npvt-ssh://` links, pasted SSH JSON, or an `ssh -J`/`sshuttle` jump-chain command) | native sing-box `ssh` outbound, chained through jump/bastion hosts via `detour` when present |
 | MTProto (`tg://proxy`, `mtproto://`) | parsed/stored/QR-exportable only — Telegram proxies aren't a system tunnel, so these open directly in Telegram instead of connecting through FIST |
 | Anything else sing-box supports natively (SOCKS, TUIC, Naive, ShadowTLS, AnyTLS, …) | paste sing-box's own outbound JSON as a **raw outbound** |
 | Truly unknown formats | an installed **extension** you choose per-config |

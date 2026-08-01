@@ -323,7 +323,20 @@ export default function App() {
     const result = await window.soul.addLink(link);
     await refresh();
     setShowAdd(false);
-    showToast(Array.isArray(result) ? `${result.length} configs added` : 'Config added');
+    // ssh -J / sshuttle command lines never carry passwords (key-based or
+    // interactive auth in real usage) -- flag it instead of a silent
+    // "Config added" that then just fails to connect with no clue why.
+    const needsAuth = !Array.isArray(result) && result.protocol === 'ssh' && (
+      (!result.password && !result.privateKey)
+      || (result.jumps || []).some((j) => !j.password && !j.privateKey)
+    );
+    showToast(
+      Array.isArray(result)
+        ? `${result.length} configs added`
+        : needsAuth
+          ? 'Config added — edit it to add a password or private key for each hop before connecting'
+          : 'Config added'
+    );
   }, [refresh, showToast]);
 
   const handleAddWithEngine = useCallback(async (text, engine) => {

@@ -49,6 +49,39 @@ function tlsSettings(p) {
   return tls;
 }
 
+// SSH outbound auth: password or an inline private key (PEM text), confirmed
+// against the bundled sing-box binary's schema (`sing-box check`) -- both
+// `password` and `private_key`/`private_key_path`/`private_key_passphrase`
+// are valid fields, so a hop can use either without us having to guess.
+function sshAuthFields(hop) {
+  const out = {};
+  if (hop.privateKey) {
+    out.private_key = hop.privateKey;
+    if (hop.privateKeyPassphrase) out.private_key_passphrase = hop.privateKeyPassphrase;
+  } else {
+    out.password = hop.password;
+  }
+  return out;
+}
+
+// SSH jump-host chaining (mirrors `ssh -J hop1,hop2,... finalHost` / sshuttle's
+// `--ssh-cmd 'ssh -J ...'`): each intermediate hop is its own `ssh` outbound,
+// chained via sing-box's `detour` field so hop N's own TCP connection is
+// carried over hop N-1's tunnel instead of dialing directly -- confirmed
+// valid via `sing-box check`. The final destination becomes the profile's
+// own 'proxy'-tagged outbound with its detour pointed at the last hop.
+function buildSshJumpOutbounds(jumps) {
+  return (jumps || []).map((hop, i) => ({
+    type: 'ssh',
+    tag: `jump${i}`,
+    server: hop.address,
+    server_port: hop.port,
+    user: hop.username,
+    ...sshAuthFields(hop),
+    ...(i > 0 ? { detour: `jump${i - 1}` } : {}),
+  }));
+}
+
 function buildOutbound(p) {
   const transport = transportSettings(p);
   switch (p.protocol) {
@@ -99,13 +132,15 @@ function buildOutbound(p) {
       // sing-box has a native `ssh` outbound (confirmed via `sing-box
       // check`), so a plain SSH-tunneled proxy runs through the same
       // engine as everything else -- no separate ssh2/socks stack needed.
+      // `detour` (set below in buildSingboxConfig when p.jumps is present)
+      // chains this through one or more jump/bastion hosts first.
       return {
         type: 'ssh',
         tag: 'proxy',
         server: p.address,
         server_port: p.port,
         user: p.username,
-        password: p.password,
+        ...sshAuthFields(p),
       };
     case 'hysteria2': {
       const out = {
@@ -207,12 +242,19 @@ function buildSingboxConfig(profile, opts = {}) {
   }
 
   const isWireguard = profile.protocol === 'wireguard';
+  const hasJumps = profile.protocol === 'ssh' && Array.isArray(profile.jumps) && profile.jumps.length > 0;
 
   const outbounds = [
     { type: 'direct', tag: 'direct' },
     { type: 'block', tag: 'block' },
   ];
-  if (!isWireguard) outbounds.unshift(buildOutbound(profile));
+  if (hasJumps) {
+    const mainOutbound = buildOutbound(profile);
+    mainOutbound.detour = `jump${profile.jumps.length - 1}`;
+    outbounds.unshift(mainOutbound, ...buildSshJumpOutbounds(profile.jumps));
+  } else if (!isWireguard) {
+    outbounds.unshift(buildOutbound(profile));
+  }
 
   const config = {
     // sing-box has no 'none' level -- 'none' instead disables logging outright.

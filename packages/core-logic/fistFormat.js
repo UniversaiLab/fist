@@ -115,6 +115,11 @@ function encodeProfile(p) {
       break;
     case 'ssh':
       Object.assign(o, { u: p.username, pw: p.password });
+      if (p.privateKey) o.pk = p.privateKey;
+      if (Array.isArray(p.jumps) && p.jumps.length) {
+        // Jump/bastion chain, entry hop first: [address, port, username, password, privateKey].
+        o.jp = p.jumps.map((j) => [j.address, j.port, j.username, j.password || '', j.privateKey || '']);
+      }
       break;
     default:
       throw new Error(`.fist cannot encode protocol: ${p.protocol}`);
@@ -174,6 +179,12 @@ function decodeProfile(o, baseProfile) {
     case 'ssh':
       p.username = o.u;
       p.password = o.pw || '';
+      p.privateKey = o.pk || '';
+      if (Array.isArray(o.jp)) {
+        p.jumps = o.jp.map(([address, port, username, password, privateKey]) => (
+          { address, port, username, password: password || '', privateKey: privateKey || '' }
+        ));
+      }
       break;
   }
   p.name = p.name || `${p.address}:${p.port}`;
