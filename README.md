@@ -1,217 +1,248 @@
-# Soul Connection
+# FIST · 1819
 
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Release](https://img.shields.io/github/v/release/mrsoulcommunity/Fullstack-Soul-Connection?label=version)](https://github.com/mrsoulcommunity/Fullstack-Soul-Connection/releases)
-[![Downloads](https://img.shields.io/github/downloads/mrsoulcommunity/Fullstack-Soul-Connection/total)](https://github.com/mrsoulcommunity/Fullstack-Soul-Connection/releases)
-
-> **A powerful, secure, and user-friendly cross-platform proxy client built with React, Electron, and gRPC.**
-
-Soul Connection is a modern desktop application designed to manage and connect to various proxy protocols seamlessly. Built on top of the robust Sing-box core, it provides an intuitive interface for managing VLESS, Trojan, and Shadowsocks connections with advanced features like real-time latency testing, subscription management, and system proxy configuration.
+A cross-platform (Windows / macOS / Linux) desktop VPN/proxy client built on
+[sing-box](https://sing-box.sagernet.org/), with a plug-and-play extension
+system for protocols it doesn't natively support, and a client-side config
+marketplace prototype.
 
 ---
 
-## ✨ Features
+## What FIST does
 
-- 🚀 **Multi-Protocol Support**: Full support for VLESS (Reality), Trojan, and Shadowsocks protocols.
-- 🛡️ **Secure & Private**: Built-in encryption and privacy-focused design with no data logging.
-- ⚡ **High Performance**: Optimized routing engine powered by Sing-box for minimal latency.
-- 🌐 **Cross-Platform**: Runs smoothly on Windows, macOS, and Linux.
-- 🎨 **Modern UI**: Clean, responsive interface built with React and Tailwind CSS.
-- 🔄 **Subscription Management**: Import and auto-update configurations via remote links.
-- 📊 **Real-time Latency Test**: One-click speed test for all servers with visual indicators.
-- 🔍 **Smart Routing**: Automatic rule-based routing for domestic and international traffic.
-- 💻 **System Proxy Integration**: Easily toggle system-wide proxy or use PAC mode.
-- 📦 **Portable Mode**: Available as a portable executable for USB drives or restricted environments.
+- **Connects through sing-box** — a single Go binary handles every native
+  protocol below, plus a system-wide TUN mode for full-tunnel routing.
+- **One connect button, two routing modes** — *System Proxy* (a local
+  SOCKS5/HTTP proxy you point apps at, or let FIST set as the OS system proxy)
+  and *Full Tunnel* (a TUN device that routes all system traffic; requires
+  administrator/root, since installing routes and a virtual network
+  interface needs elevated privileges on every OS).
+- **Plug-and-play for anything else** — if a pasted config isn't a protocol
+  FIST recognizes, you choose an engine to run it: a raw sing-box outbound
+  JSON passthrough, or an installed extension (its own OS process) that can
+  take full control of connecting and routing for that config. See
+  [Engines / extensions](#engines--extensions) below.
+- **Kill Switch** — blocks all outbound traffic if the tunnel drops
+  unexpectedly, until you reconnect or turn it off.
+- **Subscriptions** — import a subscription URL, auto-update on an interval,
+  see per-subscription data-usage/expiry.
+- **`.fist` bundles** — a compact, dependency-free export/import format for
+  moving many configs at once (see `packages/core-logic/fistFormat.js`).
+- **Server Finder** — batch ping/real-connect/speed tests across your
+  configs with a live dashboard, to find the fastest one.
+- **Config marketplace (prototype)** — a client-side "buy/sell configs"
+  mockup, with an optional real backend (`packages/marketplace-server`) that
+  has real accounts/listings/purchases but only ever simulates payment.
+
+## Supported protocols
+
+| Protocol | How it runs |
+|---|---|
+| VLESS (incl. Reality) | native sing-box outbound |
+| VMess | native sing-box outbound |
+| Trojan | native sing-box outbound |
+| Shadowsocks | native sing-box outbound |
+| Hysteria2 (`hysteria2://`, `hy2://`) | native sing-box outbound |
+| WireGuard (`.conf` import) | native sing-box endpoint |
+| SSH (`npvt-ssh://` links, or pasted SSH JSON) | native sing-box `ssh` outbound |
+| MTProto (`tg://proxy`, `mtproto://`) | parsed/stored/QR-exportable only — Telegram proxies aren't a system tunnel, so these open directly in Telegram instead of connecting through FIST |
+| Anything else sing-box supports natively (SOCKS, TUIC, Naive, ShadowTLS, AnyTLS, …) | paste sing-box's own outbound JSON as a **raw outbound** |
+| Truly unknown formats | an installed **extension** you choose per-config |
+
+## Engines / extensions
+
+Every config runs through an *engine* — whatever actually connects and
+routes traffic for it. The **Engines** tab (top-right, `</>` icon) is the
+registry: it always lists the built-in `sing-box` engine, plus any
+extensions you've installed, with install/remove controls.
+
+An extension is a local folder (`extension.json` manifest + an entry
+script) that FIST spawns as its own child process and talks to over a
+newline-delimited JSON protocol on stdin/stdout — see
+[`packages/desktop/example-extensions/README.md`](packages/desktop/example-extensions/README.md)
+for the exact wire protocol, and `example-extensions/demo-engine/` for a
+minimal but real working reference (opens an actual local TCP forwarder).
+**Installing an extension runs it with the same privileges as any other
+program on your machine** — FIST isolates it into its own OS process so a
+crash there doesn't take down the app, but does not sandbox what its code
+does. Only install extensions you trust.
+
+When you add a config that FIST can't parse, it offers a picker: run it as
+a raw sing-box outbound, or hand it to one of your installed extensions.
+Configs added this way show a small badge on their server-list card naming
+the engine that runs them (and flag it in red if that extension has since
+been removed).
 
 ---
 
-## 🛠️ Tech Stack
+## Repository layout
 
-| Layer | Technology |
-|-------|------------|
-| **Frontend** | React 18, TypeScript, Tailwind CSS, Radix UI |
-| **Desktop Shell** | Electron 28+ |
-| **Build Tool** | Vite |
-| **Core Engine** | Sing-box (via gRPC) |
-| **State Management** | Zustand / Context API |
-| **Communication** | gRPC (Protobuf) |
-| **Packaging** | electron-builder |
+This is an npm-workspaces monorepo:
 
----
-
-## 📦 Installation
-
-### Prerequisites
-
-Ensure you have the following installed:
-- [Node.js](https://nodejs.org/) (v18 or higher)
-- [npm](https://www.npmjs.com/) or [yarn](https://yarnpkg.com/)
-- Git
-
-### Clone the Repository
-
-```bash
-git clone https://github.com/mrsoulcommunity/Fullstack-Soul-Connection.git
-cd Fullstack-Soul-Connection
+```
+packages/
+  core-logic/          Shared pure JS: link/subscription parsers, .fist
+                        bundle codec, sing-box config builder, formatting/
+                        scoring helpers. No Electron or Node-only APIs, so
+                        it can be reused by a future mobile client too.
+  desktop/              The Electron app itself.
+    electron/           Main process: window/tray, IPC handlers, sing-box
+                         process management, system proxy, kill switch,
+                         elevation, the extension host, auto-updater.
+    src/                Renderer: React 18 UI (no build-time CSS framework —
+                         plain index.css).
+    example-extensions/ Reference extension + protocol docs (see above).
+    bin/<platform>/     sing-box binary — gitignored, see "Getting the
+                         sing-box binary" below.
+  marketplace-server/   Optional Bun + Hono + Redis backend for the config
+                         marketplace (real accounts/listings/purchases,
+                         mocked payment processing only).
 ```
 
-### Install Dependencies
+---
+
+## Getting started (development)
+
+### Requirements
+
+- [Node.js](https://nodejs.org/) 18+ and npm (npm workspaces drive the whole
+  repo)
+- [Go](https://go.dev/) 1.21+ — only needed once, to build the sing-box
+  binary (see below)
+- [Bun](https://bun.sh/) — only needed if you're running the marketplace
+  server
+- A local [Redis](https://redis.io/) instance — only needed for the
+  marketplace server
+
+### 1. Clone and install
 
 ```bash
+git clone https://github.com/UniversaiLab/fist.git
+cd fist
 npm install
-# or
-yarn install
 ```
 
----
+### 2. Get the sing-box binary
 
-## 🚀 Usage
+sing-box is FIST's actual connection engine, and its binary is **not**
+committed to the repo (`bin/` is gitignored — it's large, per-platform, and
+easy to rebuild). Build it yourself with the same version and build tags CI
+uses, so every feature (Hysteria2, WireGuard, the stats API, etc.) actually
+works:
 
-### Development Mode
+```bash
+go install -tags "with_quic,with_grpc,with_utls,with_clash_api,with_v2ray_api,with_wireguard,with_gvisor" \
+  github.com/sagernet/sing-box/cmd/sing-box@v1.13.14
+```
 
-Run the app in development mode with hot-reloading:
+Then copy the built binary into `packages/desktop/bin/<platform>/`, matching
+`process.platform` values:
+
+```bash
+# Linux
+mkdir -p packages/desktop/bin/linux
+cp "$(go env GOPATH)/bin/sing-box" packages/desktop/bin/linux/sing-box
+
+# macOS
+mkdir -p packages/desktop/bin/darwin
+cp "$(go env GOPATH)/bin/sing-box" packages/desktop/bin/darwin/sing-box
+
+# Windows (PowerShell)
+mkdir packages\desktop\bin\win32
+copy "$(go env GOPATH)\bin\sing-box.exe" packages\desktop\bin\win32\sing-box.exe
+```
+
+Without this, the app still launches, but every "Connect" attempt fails
+with "The connection core (sing-box) file was not found."
+
+### 3. Run in dev mode
 
 ```bash
 npm run dev
 ```
 
-### Build Executables
+This builds the renderer once (`vite build` — there's no HMR dev server;
+Electron loads the built `dist/index.html` directly) and launches Electron.
+Re-run `npm run dev` after changing renderer (`src/`) code. Main-process
+(`electron/`) changes need a full restart.
 
-#### Standard Build
-Creates installers for your current platform:
+You can also preview just the renderer UI in a plain browser (with mocked
+IPC — no real connections) via Vite directly from `packages/desktop`:
+
 ```bash
-npm run build
+cd packages/desktop
+npx vite
 ```
 
-#### Portable Build
-Creates a standalone executable (Windows):
+---
+
+## Building for production
+
+All commands run from the repo root (they delegate to the `packages/desktop`
+workspace):
+
 ```bash
-npm run build:portable
+npm run dist            # current OS, NSIS installer on Windows
+npm run dist:portable   # Windows portable .exe, no installer
+npm run dist:mac        # macOS .dmg + .zip
+npm run dist:linux      # Linux AppImage + .deb
+npm run dist:publish    # build and publish to GitHub Releases
 ```
 
-#### Publish Release
-Builds and prepares artifacts for GitHub release:
+Each target needs the matching platform's `bin/<platform>/sing-box[.exe]`
+present (see step 2 above) — `electron-builder` bundles it as an
+`extraResource`. `.github/workflows/build.yml` runs the same build on a
+Windows/macOS/Linux matrix on every push, building sing-box from source on
+each runner first.
+
+---
+
+## The marketplace server (optional)
+
+`packages/marketplace-server` is a real backend (accounts, listings,
+purchases, per-creator earnings) for the desktop app's Marketplace tab —
+**payment processing is entirely mocked**, no real money ever moves. It's
+independent of the desktop app; the app's Marketplace tab currently runs
+its own client-side mock data and doesn't call this server yet.
+
+Requires Bun and a reachable Redis:
+
 ```bash
-npm run publish
+cd packages/marketplace-server
+bun install
+REDIS_URL=redis://localhost:6379 bun run dev   # or: npm run marketplace:server:dev (from repo root)
 ```
 
-### Running the App
+Environment variables:
 
-1. Launch the application via the generated executable or `npm run dev`.
-2. **Add a Server**:
-   - Click **"Import from Clipboard"** to paste a share link (`vless://`, `trojan://`, `ss://`).
-   - Or manually enter configuration details.
-3. **Connect**: Select a server from the list and click **"Connect"**.
-4. **Test Latency**: Click the **⚡** icon next to any server to check its speed.
-5. **System Proxy**: Enable "System Proxy" in settings to route all traffic through the tunnel.
+| Variable | Default | Purpose |
+|---|---|---|
+| `REDIS_URL` | `redis://localhost:6379` (Bun's default) | Redis connection |
+| `JWT_SECRET` | an insecure dev default | HS256 signing key for auth tokens — **set a real secret in production** |
+| `PORT` | `4310` | HTTP port |
 
 ---
 
-## 📂 Project Structure
+## Where FIST stores your data
 
-```text
-Fullstack-Soul-Connection/
-├── src/
-│   ├── main/             # Electron Main Process (gRPC, Window Mgmt)
-│   ├── renderer/         # React Frontend (UI Components)
-│   ├── core/             # Sing-box integration logic
-│   └── utils/            # Helper functions
-├── public/               # Static assets
-├── proto/                # Protobuf definitions for gRPC
-├── releases/             # Build output directory
-├── package.json          # Project metadata & scripts
-├── vite.config.ts        # Vite configuration
-└── electron-builder.yml  # Packaging configuration
-```
+Per-user, not in the repo:
+
+- **Windows**: `%APPDATA%\FIST\`
+- **macOS**: `~/Library/Application Support/FIST/`
+- **Linux**: `~/.config/FIST/`
+
+Inside: `profiles.json` (configs, subscriptions, settings — plain JSON, no
+external database), `extensions/` (installed engine extensions),
+`singbox-run/` (the active generated sing-box config + its logs, also
+reachable from Settings → Advanced → "Open").
 
 ---
 
-## ⚙️ Configuration
+## License
 
-The app stores user preferences and server lists in a local JSON file:
-- **Windows**: `%APPDATA%\soul-connection\config.json`
-- **macOS**: `~/Library/Application Support/soul-connection/config.json`
-- **Linux**: `~/.config/soul-connection/config.json`
+MIT — see [LICENSE](LICENSE).
 
-Supported configuration options:
-- `autoConnect`: Automatically connect to the last used server on startup.
-- `startupLaunch`: Run app on system boot.
-- `theme`: Light/Dark/System theme preference.
-- `routingMode`: Global, Rule-based, or Direct.
+## Disclaimer
 
----
-
-## 📜 Available Scripts
-
-| Command | Description |
-|---------|-------------|
-| `npm run dev` | Start development server with hot reload |
-| `npm run build` | Build production app for current OS |
-| `npm run build:win` | Build for Windows |
-| `npm run build:mac` | Build for macOS |
-| `npm run build:linux` | Build for Linux |
-| `npm run build:portable` | Create portable executable |
-| `npm run publish` | Build and prepare for GitHub release |
-| `npm run lint` | Run ESLint checks |
-| `npm run type-check` | Verify TypeScript types |
-
----
-
-## 🌐 Supported Protocols
-
-| Protocol | Features | Status |
-|----------|----------|--------|
-| **VLESS** | Reality, Vision, XTLS | ✅ Fully Supported |
-| **Trojan** | TLS, WebSocket | ✅ Fully Supported |
-| **Shadowsocks** | AEAD Ciphers (AES-128-GCM, Chacha20) | ✅ Fully Supported |
-
----
-
-## 🤝 Contributing
-
-We welcome contributions! Please follow these steps:
-
-1. Fork the repository.
-2. Create a feature branch (`git checkout -b feature/amazing-feature`).
-3. Commit your changes (`git commit -m 'Add amazing feature'`).
-4. Push to the branch (`git push origin feature/amazing-feature`).
-5. Open a Pull Request.
-
-Please read our [Contributing Guidelines](CONTRIBUTING.md) for details on code style and testing.
-
----
-
-## 📄 License
-
-This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
-
----
-
-## 👥 Authors
-
-- **Soul Community** - *Initial work* - [mrsoulcommunity](https://github.com/mrsoulcommunity)
-
-See also the list of [contributors](https://github.com/mrsoulcommunity/Fullstack-Soul-Connection/contributors) who participated in this project.
-
----
-
-## ⚠️ Disclaimer
-
-This software is intended for educational purposes and legitimate privacy protection only. The developers are not responsible for any misuse of this software. Users must comply with local laws and regulations regarding internet usage and proxy services.
-
----
-
-## 📥 Download
-
-Get the latest version from our [Releases Page](https://github.com/mrsoulcommunity/Fullstack-Soul-Connection/releases).
-
----
-
-<div align="center">
-  <p>Made with ❤️ by the Soul Team</p>
-  <p>
-    <a href="https://github.com/mrsoulcommunity/Fullstack-Soul-Connection">GitHub</a> •
-    <a href="https://github.com/mrsoulcommunity/Fullstack-Soul-Connection/issues">Issues</a> •
-    <a href="https://github.com/mrsoulcommunity/Fullstack-Soul-Connection/discussions">Discussions</a>
-  </p>
-</div>
+FIST is a general-purpose proxy/VPN client. You're responsible for
+complying with the laws and terms of service that apply to you and to
+whatever servers/configs you connect it to.

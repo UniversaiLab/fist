@@ -4,7 +4,6 @@ import CoreLogic from '@soul-connection/core-logic';
 const { formatBytes } = CoreLogic;
 import { Section, Toggle } from './settingsPrimitives.jsx';
 import NetworkSettings from './NetworkSettings.jsx';
-import ExtensionsSettings from './ExtensionsSettings.jsx';
 
 const INTERVAL_OPTIONS = [
   { value: 0, label: 'Off' },
@@ -140,8 +139,6 @@ export default function SettingsView({
           </div>
         ))}
       </Section>
-
-      <ExtensionsSettings />
 
       <Section title="Backup" icon="shield" description="Save and restore configs and settings">
         <div className="setting-row">

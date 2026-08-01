@@ -25,6 +25,22 @@ function pingLabel(ms) {
   return `${ms}ms`;
 }
 
+// Which engine actually runs this config, for the badge on its card --
+// native protocols run through the built-in sing-box engine implicitly (no
+// badge needed), while a raw passthrough or an extension-backed config
+// benefits from a visible reminder of what it needs to connect.
+function engineInfo(profile, extensions) {
+  if (profile.protocol === 'raw') {
+    return { label: 'sing-box · raw', title: 'Runs as a raw sing-box outbound JSON you provided.' };
+  }
+  if (profile.protocol === 'extension' || (profile.engine && profile.engine !== 'sing-box')) {
+    const ext = (extensions || []).find((e) => e.id === profile.engine);
+    if (ext) return { label: ext.name, title: ext.description || `Runs through the "${ext.name}" extension.` };
+    return { label: 'engine missing', title: `Install "${profile.engine}" in Engines to connect this config.`, missing: true };
+  }
+  return null;
+}
+
 function groupStats(items, pings) {
   const totalBytes = items.reduce((sum, p) => sum + (p.totalBytes || 0), 0);
   const measured = items
@@ -38,7 +54,8 @@ function groupStats(items, pings) {
 // App state) doesn't re-render every other card in a list that can run into
 // the hundreds. Relies on `onSelect`/`onDelete`/`onPing`/`onContextMenu` being
 // referentially stable (useCallback'd) across unrelated re-renders.
-const ServerCard = React.memo(function ServerCard({ profile, active, connected, ms, onSelect, onRequestDelete, onPing, onContextMenu }) {
+const ServerCard = React.memo(function ServerCard({ profile, active, connected, ms, extensions, onSelect, onRequestDelete, onPing, onContextMenu }) {
+  const engine = engineInfo(profile, extensions);
   return (
     <motion.div
       layout
@@ -51,11 +68,18 @@ const ServerCard = React.memo(function ServerCard({ profile, active, connected, 
         <div className="name">
           {connected && <span className="connected-dot" aria-hidden="true" />}
           {profile.favorite && <Icon name="star" size={10} className="fav-mark" />}
-          {profile.name || profile.address}
+          <span className="name-text">{profile.name || profile.address}</span>
         </div>
         <div className="addr mono">
-          {profile.address}:{profile.port}
-          {profile.totalBytes > 0 && <span className="usage-tag"> · {formatBytes(profile.totalBytes)}</span>}
+          <span className="addr-text">
+            {profile.address}:{profile.port}
+            {profile.totalBytes > 0 && <span className="usage-tag"> · {formatBytes(profile.totalBytes)}</span>}
+          </span>
+          {engine && (
+            <span className={`engine-tag ${engine.missing ? 'missing' : ''}`} title={engine.title}>
+              {engine.label}
+            </span>
+          )}
         </div>
       </div>
       <button className={`ping ${pingClass(ms)}`} onClick={() => onPing(profile.id)}>
@@ -69,7 +93,7 @@ const ServerCard = React.memo(function ServerCard({ profile, active, connected, 
 });
 
 export default function ServerList({
-  profiles, subscriptions, activeProfileId, connectionState, pings, updatingSubs, refreshingSubIds,
+  profiles, subscriptions, extensions, activeProfileId, connectionState, pings, updatingSubs, refreshingSubIds,
   onSelect, onDelete, onPing, onPingAll, onAdd,
   onRefreshSubscription, onUpdateAllSubscriptions, onDeleteSubscription,
   onConnectTo, onDisconnect, onRenameProfile, onEditProfile, onUpdateSubscription, onToast,
@@ -318,6 +342,7 @@ export default function ServerList({
                 active={p.id === activeProfileId}
                 connected={p.id === activeProfileId && connectionState === 'connected'}
                 ms={pings[p.id]}
+                extensions={extensions}
                 onSelect={onSelect}
                 onRequestDelete={requestDeleteProfile}
                 onPing={onPing}

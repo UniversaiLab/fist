@@ -5,6 +5,7 @@ import ConnectHero from './components/ConnectHero.jsx';
 import StatusBar from './components/StatusBar.jsx';
 import SettingsView from './components/SettingsView.jsx';
 import Marketplace from './components/Marketplace.jsx';
+import Engines from './components/Engines.jsx';
 import ServerFinder from './components/ServerFinder.jsx';
 import Icon from './components/Icon.jsx';
 import { loadSession, saveSession, clearSession } from './utils/sessionState.js';
@@ -81,12 +82,24 @@ export default function App() {
   const [windowMaximized, setWindowMaximized] = useState(false);
   const [systemProxyEnabled, setSystemProxyEnabled] = useState(false);
   const [killSwitchBlocking, setKillSwitchBlocking] = useState(false);
+  const [extensions, setExtensions] = useState([]);
 
   useEffect(() => {
     window.soul.windowIsMaximized?.().then(setWindowMaximized).catch(() => {});
     const off = window.soul.onWindowState?.(({ maximized }) => setWindowMaximized(maximized));
     return () => off && off();
   }, []);
+
+  // Which engine each non-native config uses (for the badge on its server
+  // card) -- refreshed whenever the Engines tab installs/removes one.
+  const refreshExtensions = useCallback(async () => {
+    try {
+      setExtensions(await window.soul.listExtensions());
+    } catch {
+      /* the badge just won't resolve a name -- non-critical */
+    }
+  }, []);
+  useEffect(() => { refreshExtensions(); }, [refreshExtensions]);
 
   const refresh = useCallback(async () => {
     const data = await window.soul.listProfiles();
@@ -527,6 +540,7 @@ export default function App() {
           <ServerList
             profiles={profiles}
             subscriptions={subscriptions}
+            extensions={extensions}
             activeProfileId={activeProfileId}
             connectionState={connectionState}
             pings={pings}
@@ -572,9 +586,16 @@ export default function App() {
         <main className="main">
           <header className="main-head">
             <span className="main-title">
-              {tab === 'settings' ? 'Settings' : tab === 'marketplace' ? 'Marketplace' : 'Connection Control'}
+              {tab === 'settings' ? 'Settings' : tab === 'marketplace' ? 'Marketplace' : tab === 'engines' ? 'Engines' : 'Connection Control'}
             </span>
             <div className="main-head-actions">
+              <button
+                className="icon-btn ghost"
+                onClick={() => setTab(tab === 'engines' ? 'servers' : 'engines')}
+                title={tab === 'engines' ? 'Back to Connection Control' : 'Engines'}
+              >
+                <Icon name={tab === 'engines' ? 'close' : 'code'} size={16} />
+              </button>
               <button
                 className="icon-btn ghost"
                 onClick={() => setTab(tab === 'marketplace' ? 'servers' : 'marketplace')}
@@ -603,6 +624,10 @@ export default function App() {
           ) : tab === 'marketplace' ? (
             <div className="settings-pane">
               <Marketplace onBuy={handleMarketplacePurchase} onToast={showToast} />
+            </div>
+          ) : tab === 'engines' ? (
+            <div className="settings-pane">
+              <Engines onToast={showToast} onChanged={refreshExtensions} />
             </div>
           ) : (
             <div className="settings-pane">
@@ -649,9 +674,6 @@ export default function App() {
           <StatusBar
             connectionState={connectionState}
             activeProfile={activeProfile}
-            connectedAt={connectedAt}
-            latencyMs={latencyMs}
-            selectedPing={activeProfileId ? pings[activeProfileId] : undefined}
             traffic={traffic}
             notice={toast}
           />
