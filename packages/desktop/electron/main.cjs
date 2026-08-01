@@ -884,6 +884,30 @@ ipcMain.handle('profiles:update', (_e, { id, link }) => {
   return profiles;
 });
 
+// Form-based edit (the Custom-tab form re-used for editing) -- takes raw
+// field values instead of a pre-built link string, since buildCustomProfile/
+// buildLink use Node's Buffer for base64 encoding and so can only run here
+// in the main process, not in the renderer's browser context.
+ipcMain.handle('profiles:updateCustom', (_e, { id, fields }) => {
+  const parsed = buildCustomProfile(fields);
+  if (id === store.get('activeProfileId') && connectionState !== 'disconnected') {
+    throw new Error('Disconnect first');
+  }
+  const profiles = store.get('profiles', []);
+  const existing = profiles.find((p) => p.id === id);
+  if (!existing) throw new Error('Config not found');
+  Object.assign(existing, parsed, {
+    id: existing.id,
+    subId: existing.subId,
+    favorite: existing.favorite,
+    totalBytes: existing.totalBytes,
+    createdAt: existing.createdAt,
+    lastUsedAt: existing.lastUsedAt,
+  });
+  store.set('profiles', profiles);
+  return profiles;
+});
+
 ipcMain.handle('subscriptions:add', async (_e, url) => {
   const { text, headers } = await fetchText(url);
   const parsed = parseMany(text);

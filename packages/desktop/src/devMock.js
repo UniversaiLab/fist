@@ -188,6 +188,7 @@ export function installDevMock() {
       return [...profiles];
     },
     updateProfile: async () => { throw new Error('Not available in preview mode'); },
+    updateCustomConfig: async () => { throw new Error('Not available in preview mode'); },
     updateSubscription: async (id, patch) => {
       const s = subscriptions.find((x) => x.id === id);
       if (s) Object.assign(s, patch);

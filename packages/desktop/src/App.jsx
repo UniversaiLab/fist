@@ -269,6 +269,12 @@ export default function App() {
     showToast('Config updated');
   }, [showToast]);
 
+  const handleEditCustomProfile = useCallback(async (id, fields) => {
+    const updated = await window.soul.updateCustomConfig(id, fields);
+    setProfiles(updated);
+    showToast('Config updated');
+  }, [showToast]);
+
   const handlePing = useCallback(async (id) => {
     setPings((p) => ({ ...p, [id]: 'measuring' }));
     try {
@@ -459,6 +465,15 @@ export default function App() {
     }
   }
 
+  async function handleExportFist(ids) {
+    try {
+      const res = await window.soul.exportFist(ids);
+      if (!res.canceled) showToast(`${res.count} config${res.count === 1 ? '' : 's'} exported as .fist`);
+    } catch (err) {
+      showToast(err.message || 'Export failed');
+    }
+  }
+
   async function handleImportBackup() {
     try {
       const res = await window.soul.importBackup();
@@ -570,7 +585,9 @@ export default function App() {
             onDisconnect={handleDisconnect}
             onRenameProfile={handleRenameProfile}
             onEditProfile={handleEditProfile}
+            onEditCustomProfile={handleEditCustomProfile}
             onUpdateSubscription={handleUpdateSubscription}
+            onExportFist={handleExportFist}
             onToast={showToast}
             initialQuery={sessionRef.current.query}
             initialSortBy={sessionRef.current.sortBy}
@@ -658,6 +675,7 @@ export default function App() {
                   onUpdateChecked={handleUpdateSettingsChecked}
                   onOpenLogsFolder={() => window.soul.openLogsFolder()}
                   onExportBackup={handleExportBackup}
+                  onExportFist={handleExportFist}
                   onImportBackup={handleImportBackup}
                   onResetUsage={handleResetUsage}
                   onResetAllUsage={handleResetAllUsage}

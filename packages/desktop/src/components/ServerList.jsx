@@ -3,11 +3,18 @@ import { motion } from 'framer-motion';
 import Icon from './Icon.jsx';
 import ContextMenu from './ContextMenu.jsx';
 import { RenameModal, EditProfileModal, EditSubscriptionModal, SubscriptionDetailsModal, ConfirmModal } from './ManageModals.jsx';
+import CustomConfigForm from './CustomConfigForm.jsx';
 import QrModal from './QrModal.jsx';
 import SubTestModal from './SubTestModal.jsx';
 import * as engine from '../finder/testEngine.js';
 import CoreLogic from '@soul-connection/core-logic';
 const { formatBytes, relativeTime, subUsageInfo } = CoreLogic;
+
+// Protocols the Custom-tab form (CustomConfigForm) knows how to build --
+// profiles in this set get a real form to edit, instead of the raw-link
+// textarea fallback (which is the only option for hysteria2/wireguard/
+// mtproto/raw, since those have no Custom-tab form to begin with).
+const CUSTOM_EDITABLE_PROTOCOLS = new Set(['vmess', 'vless', 'trojan', 'shadowsocks', 'ssh']);
 
 function pingClass(ms) {
   if (ms === undefined) return 'na';
@@ -96,7 +103,7 @@ export default function ServerList({
   profiles, subscriptions, extensions, activeProfileId, connectionState, pings, updatingSubs, refreshingSubIds,
   onSelect, onDelete, onPing, onPingAll, onAdd,
   onRefreshSubscription, onUpdateAllSubscriptions, onDeleteSubscription,
-  onConnectTo, onDisconnect, onRenameProfile, onEditProfile, onUpdateSubscription, onToast,
+  onConnectTo, onDisconnect, onRenameProfile, onEditProfile, onEditCustomProfile, onUpdateSubscription, onExportFist, onToast,
   initialQuery, initialSortBy, initialCollapsed, onSessionChange,
 }) {
   const [query, setQuery] = useState(initialQuery || '');
@@ -170,10 +177,11 @@ export default function ServerList({
       { icon: 'copy', label: 'Copy', onClick: () => copyText(profile.link, 'Link copied') },
       { icon: 'arrowUp', label: 'Share / Export', onClick: () => copyText(profile.link, 'Link copied for sharing') },
       { icon: 'qrcode', label: 'Share via QR', onClick: () => setModal({ type: 'qr', value: profile.link, title: profile.name || profile.address, subtitle: `${profile.address}:${profile.port}` }) },
+      { icon: 'arrowDown', label: 'Export as .fist file', onClick: () => onExportFist?.([profile.id]) },
       { icon: 'trash', label: 'Delete', danger: true, sepBefore: true, onClick: () => requestDeleteProfile(profile) },
     ];
     setCtxMenu({ x: e.clientX, y: e.clientY, title: profile.name || profile.address, items });
-  }, [activeProfileId, connectionState, onDisconnect, onConnectTo, onPing, requestDeleteProfile, copyText]);
+  }, [activeProfileId, connectionState, onDisconnect, onConnectTo, onPing, requestDeleteProfile, copyText, onExportFist]);
 
   const openSubMenu = useCallback((e, sub) => {
     e.preventDefault();
@@ -364,7 +372,23 @@ export default function ServerList({
           onSubmit={(name) => onRenameProfile(modal.profile.id, name)}
         />
       )}
-      {modal?.type === 'editProfile' && (
+      {modal?.type === 'editProfile' && CUSTOM_EDITABLE_PROTOCOLS.has(modal.profile.protocol) && (
+        <div className="overlay" onClick={(e) => e.target === e.currentTarget && setModal(null)}>
+          <div className="modal wide">
+            <h3>Edit Config</h3>
+            <CustomConfigForm
+              initialProfile={modal.profile}
+              submitLabel="Save"
+              onCancel={() => setModal(null)}
+              onSubmit={async (fields) => {
+                await onEditCustomProfile(modal.profile.id, fields);
+                setModal(null);
+              }}
+            />
+          </div>
+        </div>
+      )}
+      {modal?.type === 'editProfile' && !CUSTOM_EDITABLE_PROTOCOLS.has(modal.profile.protocol) && (
         <EditProfileModal
           profile={modal.profile}
           onClose={() => setModal(null)}

@@ -34,7 +34,7 @@ export default function SettingsView({
   settings, connectionState, profiles, appInfo, systemProxyEnabled,
   updaterStatus, onCheckForUpdates, onDownloadUpdate, onInstallUpdate,
   onUpdate, onUpdateChecked, onOpenLogsFolder,
-  onExportBackup, onImportBackup, onResetUsage, onResetAllUsage,
+  onExportBackup, onExportFist, onImportBackup, onResetUsage, onResetAllUsage,
   onSystemProxyEnable, onSystemProxyDisable, onOpenProxyFolder, onResetNetworkDefaults,
   killSwitchBlocking,
 }) {
@@ -147,6 +147,16 @@ export default function SettingsView({
             <span className="setting-hint">Save all servers, subscriptions, and settings to a single JSON file</span>
           </div>
           <button className="btn icon-inline-btn" onClick={onExportBackup}>
+            <Icon name="arrowDown" size={14} />
+            Export
+          </button>
+        </div>
+        <div className="setting-row">
+          <div className="setting-text">
+            <span className="setting-label">Export as .fist bundle</span>
+            <span className="setting-hint">A compact multi-server file for sharing between FIST installs — servers only, no app settings</span>
+          </div>
+          <button className="btn icon-inline-btn" onClick={() => onExportFist()} disabled={!profiles?.length}>
             <Icon name="arrowDown" size={14} />
             Export
           </button>
