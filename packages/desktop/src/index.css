@@ -56,7 +56,7 @@ body {
    normal case for readability. */
 .btn, .tab, .mode-pill, .icon-inline-btn,
 .setting-label, .settings-section-title,
-.main-title, .brand-name, .brand-sub, .brand-tag,
+.main-title, .brand-name, .brand-sub,
 .group-name, .chip, .stat-chip, .q-badge, .badge-live, .badge-rec,
 h3, .empty-state h3, .dash-title h2, .modal h3,
 .ctx-title, .ctx-item, .rec-title, .done-title, .st-label, .metric-label,
@@ -167,11 +167,6 @@ button:disabled { cursor: default; }
   height: 18px;
   object-fit: contain;
 }
-.titlebar-brand-sub {
-  color: var(--brand-red);
-  font-weight: 800;
-}
-
 /* ================= Sidebar ================= */
 .sidebar {
   width: 296px;
@@ -210,17 +205,6 @@ button:disabled { cursor: default; }
   letter-spacing: 0.6px;
   direction: ltr;
   text-align: start;
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-}
-
-.brand-tag {
-  font-style: normal;
-  font-weight: 800;
-  font-size: 10.5px;
-  color: var(--brand-red);
-  letter-spacing: 0.2px;
 }
 
 .brand-sub {

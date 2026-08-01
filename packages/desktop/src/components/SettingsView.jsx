@@ -192,7 +192,7 @@ export default function SettingsView({
       <Section title="About" icon="info" description="Installed version and updates">
         <div className="setting-row">
           <div className="setting-text">
-            <span className="setting-label">FIST · 1819</span>
+            <span className="setting-label">FIST</span>
             <span className="setting-hint mono">Version {appInfo?.version || '—'}</span>
           </div>
         </div>
