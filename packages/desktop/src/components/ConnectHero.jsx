@@ -2,13 +2,7 @@ import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import MapBackground from './MapBackground.jsx';
 import VaporLog from './VaporLog.jsx';
-
-const STATUS_TEXT = {
-  disconnected: 'Not connected',
-  connecting: 'Establishing tunnel…',
-  connected: 'Connected',
-  disconnecting: 'Disconnecting…',
-};
+import Icon from './Icon.jsx';
 
 const LABELS = {
   disconnected: 'Tap to connect',
@@ -39,7 +33,7 @@ function ConnectHero({ connectionState, connectionMode, activeProfile, onToggle,
             ? { duration: 0.9, repeat: Infinity, ease: 'easeInOut' }
             : { type: 'spring', stiffness: 320, damping: 22 }}
         >
-          <img className="fist-mark" src="./logo.png" alt="" />
+          <Icon name="power" size={56} strokeWidth={1.6} className="connect-icon" />
           <AnimatePresence mode="wait">
             {LABELS[connectionState] && (
               <motion.span
@@ -55,11 +49,6 @@ function ConnectHero({ connectionState, connectionMode, activeProfile, onToggle,
             )}
           </AnimatePresence>
         </motion.button>
-      </div>
-
-      <div className="stage-status">
-        <span className={`status-dot ${connectionState}`} />
-        {STATUS_TEXT[connectionState]}
       </div>
 
       <div className="stage-server">

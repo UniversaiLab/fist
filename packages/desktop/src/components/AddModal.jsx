@@ -107,6 +107,14 @@ export default function AddModal({ onClose, onAddLink, onAddFile, onAddSubscript
               />
             )}
 
+            {tab === 'link' && !offerEngines && (
+              <p className="add-engine-note">
+                Recognized formats run through FIST's built-in sing-box engine automatically.
+                Anything else offers a choice of engine (raw sing-box outbound or an installed
+                extension — see the Engines tab) once you hit Add.
+              </p>
+            )}
+
             {error && <div className="error-msg">{error}</div>}
 
             {tab === 'link' && offerEngines && (
@@ -142,7 +150,7 @@ export default function AddModal({ onClose, onAddLink, onAddFile, onAddSubscript
                   ))}
                   {extensions.length === 0 && (
                     <p className="hint">
-                      No extensions installed yet. Add one in Settings → Extensions.
+                      No extensions installed yet. Add one from the Engines tab.
                     </p>
                   )}
                 </div>

@@ -1,11 +1,9 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import DottedMap from 'dotted-map';
 import CoreLogic from '@soul-connection/core-logic';
-import { coordsFor, randomHub } from '../utils/mapCoords.js';
+import { coordsFor } from '../utils/mapCoords.js';
 
 const { countryOf } = CoreLogic;
-
-const HUB_CYCLE_MS = 4200;
 
 const IDLE_STATS = [
   () => `${(8400 + Math.floor(Math.random() * 6000)).toLocaleString()} NODES ONLINE`,
@@ -50,32 +48,21 @@ export default function MapBackground({ connectionState, activeProfile }) {
   const busy = connectionState === 'connecting' || connectionState === 'disconnecting';
   const idle = connectionState === 'disconnected';
 
-  // Idle: drift to a new random hub city every few seconds. Busy/connected:
-  // lock onto the actual target server's location when we can tell where it
-  // is (best-effort, name-based -- see core-logic/geo.js), otherwise fall
-  // back to a random hub so the map is never just blank.
-  const [hub, setHub] = useState(() => randomHub());
-  const cycleRef = useRef(null);
-
-  useEffect(() => {
-    if (!idle) {
-      clearInterval(cycleRef.current);
-      return;
-    }
-    cycleRef.current = setInterval(() => setHub(randomHub()), HUB_CYCLE_MS);
-    return () => clearInterval(cycleRef.current);
-  }, [idle]);
-
+  // Only ever points at the actual target server's real detected location
+  // (best-effort, name-based -- see core-logic/geo.js) -- no idle-state
+  // random-city highlighting, so the map stays quiet until there's a real
+  // location to show.
   const targetCoords = useMemo(() => {
-    if (!idle && activeProfile) {
-      const geo = countryOf(activeProfile);
-      const coords = coordsFor(geo?.iso);
-      if (coords) return { ...coords, iso: geo.iso, label: geo.label };
-    }
-    return { ...hub };
-  }, [idle, activeProfile, hub]);
+    if (idle || !activeProfile) return null;
+    const geo = countryOf(activeProfile);
+    const coords = coordsFor(geo?.iso);
+    return coords ? { ...coords, iso: geo.iso, label: geo.label } : null;
+  }, [idle, activeProfile]);
 
-  const pin = useMemo(() => map.getPin({ lat: targetCoords.lat, lng: targetCoords.lng }), [map, targetCoords]);
+  const pin = useMemo(
+    () => (targetCoords ? map.getPin({ lat: targetCoords.lat, lng: targetCoords.lng }) : null),
+    [map, targetCoords]
+  );
 
   const statText = useStatCycle(idle);
 
@@ -86,7 +73,7 @@ export default function MapBackground({ connectionState, activeProfile }) {
           <circle key={i} cx={p.x} cy={p.y} r={0.32} className="map-dot" />
         ))}
         {pin && (
-          <g className={`map-pin ${connected ? 'connected' : busy ? 'busy' : 'idle'}`}>
+          <g className={`map-pin ${connected ? 'connected' : 'busy'}`}>
             <circle cx={pin.x} cy={pin.y} r={3.2} className="map-pin-wave map-pin-wave-2" />
             <circle cx={pin.x} cy={pin.y} r={2.2} className="map-pin-wave" />
             <circle cx={pin.x} cy={pin.y} r={0.75} className="map-pin-core" />
@@ -101,7 +88,7 @@ export default function MapBackground({ connectionState, activeProfile }) {
         </div>
       )}
 
-      {!idle && targetCoords.label && (
+      {!idle && targetCoords?.label && (
         <div className="map-loc-line mono">
           {connected ? 'CONNECTED ·' : 'ROUTING ·'} {targetCoords.label.toUpperCase()}
         </div>

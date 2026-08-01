@@ -591,17 +591,30 @@ button:disabled { cursor: default; }
 }
 
 .server-card .name {
+  display: flex;
+  align-items: center;
+  min-width: 0;
   font-size: 12.5px;
   font-weight: 600;
+}
+.server-card .name-text {
+  min-width: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .server-card .addr {
+  display: flex;
+  align-items: center;
+  min-width: 0;
   font-size: 10px;
   color: var(--text-faint);
   margin-top: 1px;
+}
+.server-card .addr-text {
+  flex-shrink: 1;
+  min-width: 68px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -911,12 +924,13 @@ button:disabled { cursor: default; }
 }
 .connect-btn:disabled { opacity: 0.9; }
 
-.fist-mark {
-  width: 128px;
-  height: auto;
-  display: block;
+.connect-icon {
+  color: var(--text);
   pointer-events: none;
+  transition: color 0.3s ease;
 }
+.ring-wrap.connected .connect-icon { color: var(--signal); }
+.ring-wrap.connecting .connect-icon, .ring-wrap.disconnecting .connect-icon { color: var(--warn); }
 
 .connect-btn .label {
   font-size: 13px;
@@ -926,17 +940,6 @@ button:disabled { cursor: default; }
 }
 
 /* ---- Stage captions ---- */
-.stage-status {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 22px;
-  font-size: 13.5px;
-  font-weight: 600;
-  color: var(--text);
-}
-
 .status-dot {
   width: 7px;
   height: 7px;
@@ -982,7 +985,7 @@ button:disabled { cursor: default; }
 
 .stage-server {
   position: relative;
-  margin-top: 7px;
+  margin-top: 24px;
   font-size: 11.5px;
   color: var(--text-faint);
   display: flex;
@@ -1052,6 +1055,11 @@ button:disabled { cursor: default; }
   background: rgba(0, 0, 0, 0.6);
   padding: 0 6px;
   overflow: hidden;
+  transition: background 0.5s ease, border-color 0.5s ease;
+}
+.status-rail.connected {
+  background: linear-gradient(90deg, rgba(34, 197, 94, 0.14), rgba(0, 0, 0, 0.6) 65%);
+  border-top-color: rgba(34, 197, 94, 0.25);
 }
 
 .rail-seg {
@@ -1192,6 +1200,13 @@ button:disabled { cursor: default; }
 
 .modal .field { margin-bottom: 10px; }
 .modal .field:last-of-type { margin-bottom: 0; }
+
+.add-engine-note {
+  margin: 8px 0 0;
+  font-size: 10.5px;
+  color: var(--text-faint);
+  line-height: 1.5;
+}
 
 .engine-picker { margin-top: 12px; }
 .engine-picker p.hint { margin: 0 0 8px; }
@@ -1715,6 +1730,111 @@ button:disabled { cursor: default; }
 .mkt-my-title { font-size: 12.5px; font-weight: 600; }
 .mkt-my-sub { font-size: 10.5px; color: var(--text-faint); margin-top: 1px; }
 .mkt-my-earnings { font-size: 13px; font-weight: 800; color: var(--signal); }
+
+/* ================= Engines ================= */
+.engines {
+  flex: 1;
+  max-width: 720px;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px 20px 24px;
+}
+
+.engines-blurb {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-dim);
+  line-height: 1.6;
+}
+
+.engine-card {
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.02);
+  padding: 12px 14px;
+  margin: 10px 0;
+}
+.engine-card-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.engine-card-icon {
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--card);
+  color: var(--text-dim);
+}
+.engine-card-icon.builtin { background: var(--signal-tint); color: var(--signal); }
+.engine-card-heading { flex: 1; min-width: 0; }
+.engine-card-name { font-size: 12.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
+.engine-card-version { font-size: 10px; color: var(--text-faint); text-transform: none; }
+.engine-card-sub { font-size: 10.5px; color: var(--text-faint); margin-top: 2px; }
+.engine-card-desc { margin: 10px 0 0; font-size: 11.5px; color: var(--text-dim); line-height: 1.5; }
+
+.engine-badge {
+  flex-shrink: 0;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  padding: 3px 8px;
+  color: var(--text-faint);
+  border: 1px solid var(--border);
+}
+.engine-badge.builtin { color: var(--signal); border-color: rgba(34, 197, 94, 0.35); }
+
+.engine-proto-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+.engine-proto-chip {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 3px 8px;
+  color: var(--text-dim);
+  background: rgba(255, 255, 255, 0.04);
+}
+.engine-proto-chip.raw { color: var(--signal); background: var(--signal-tint); }
+
+.engines-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 8px;
+  padding: 24px 12px;
+  color: var(--text-faint);
+}
+.engines-empty p { margin: 0; font-size: 11.5px; line-height: 1.6; max-width: 340px; }
+
+/* Per-config engine badge, next to the name on its server-list card. */
+.engine-tag {
+  flex-shrink: 1;
+  max-width: 74px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 8.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 1px 5px;
+  margin-inline-start: 6px;
+  color: var(--text-faint);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border);
+}
+.engine-tag.missing { color: var(--danger); border-color: rgba(255, 59, 48, 0.4); background: rgba(255, 59, 48, 0.08); }
+.server-card.active .engine-tag { color: rgba(0, 0, 0, 0.6); border-color: rgba(0, 0, 0, 0.15); background: rgba(0, 0, 0, 0.06); }
 
 .settings-card {
   background: var(--card);
