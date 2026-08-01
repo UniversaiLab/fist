@@ -85,6 +85,44 @@ function emptyJump() {
   return { address: '', port: 22, username: '', password: '', privateKey: '' };
 }
 
+// Edit mode: a stored profile already has the same field names this form
+// uses (buildCustomProfile produces that exact shape -- see parsers.js), so
+// editing is just seeding the same state from it instead of DEFAULT_FIELDS.
+function fieldsFromProfile(p) {
+  return {
+    ...DEFAULT_FIELDS,
+    protocol: p.protocol,
+    name: p.name || '',
+    address: p.address || '',
+    port: p.port || 443,
+    uuid: p.uuid || '',
+    password: p.password || '',
+    method: p.method || DEFAULT_FIELDS.method,
+    alterId: p.alterId || 0,
+    scy: p.scy || 'auto',
+    network: p.network || 'tcp',
+    security: p.security || 'tls',
+    sni: p.sni || '',
+    alpn: p.alpn || '',
+    fingerprint: p.fingerprint || '',
+    allowInsecure: !!p.allowInsecure,
+    host: p.host || '',
+    path: p.path || '',
+    headerType: p.headerType || 'none',
+    serviceName: p.serviceName || '',
+    flow: p.flow || '',
+    encryption: p.encryption || 'none',
+    publicKey: p.publicKey || '',
+    shortId: p.shortId || '',
+    spiderX: p.spiderX || '',
+    username: p.username || '',
+    privateKey: p.privateKey || '',
+    jumps: Array.isArray(p.jumps)
+      ? p.jumps.map((j) => ({ address: j.address || '', port: j.port || 22, username: j.username || '', password: j.password || '', privateKey: j.privateKey || '' }))
+      : [],
+  };
+}
+
 function Field({ label, children, hint, span }) {
   return (
     <div className={`custom-field ${span ? 'span-2' : ''}`}>
@@ -104,8 +142,8 @@ function Group({ title, children }) {
   );
 }
 
-export default function CustomConfigForm({ onSubmit, onCancel }) {
-  const [fields, setFields] = useState(DEFAULT_FIELDS);
+export default function CustomConfigForm({ onSubmit, onCancel, initialProfile, submitLabel }) {
+  const [fields, setFields] = useState(() => (initialProfile ? fieldsFromProfile(initialProfile) : DEFAULT_FIELDS));
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -376,7 +414,7 @@ export default function CustomConfigForm({ onSubmit, onCancel }) {
       <div className="row">
         <button className="btn" onClick={onCancel}>Cancel</button>
         <button className="btn primary" onClick={handleSubmit} disabled={loading}>
-          {loading ? 'Adding…' : 'Add Config'}
+          {loading ? (initialProfile ? 'Saving…' : 'Adding…') : (submitLabel || 'Add Config')}
         </button>
       </div>
     </div>

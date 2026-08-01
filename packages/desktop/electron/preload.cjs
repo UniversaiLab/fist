@@ -24,6 +24,7 @@ contextBridge.exposeInMainWorld('soul', {
   removeExtension: (id) => ipcRenderer.invoke('extensions:remove', id),
   renameProfile: (id, name) => ipcRenderer.invoke('profiles:rename', { id, name }),
   updateProfile: (id, link) => ipcRenderer.invoke('profiles:update', { id, link }),
+  updateCustomConfig: (id, fields) => ipcRenderer.invoke('profiles:updateCustom', { id, fields }),
 
   addSubscription: (url) => ipcRenderer.invoke('subscriptions:add', url),
   refreshSubscription: (id) => ipcRenderer.invoke('subscriptions:refresh', id),
