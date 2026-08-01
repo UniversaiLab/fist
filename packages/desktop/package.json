@@ -2,7 +2,7 @@
   "name": "fist-desktop",
   "productName": "FIST",
   "version": "1.0.3",
-  "description": "FIST (1819) -- a modern cross-platform VLESS/Trojan/Shadowsocks/Hysteria2/WireGuard client powered by sing-box",
+  "description": "FIST -- a modern cross-platform VLESS/Trojan/Shadowsocks/Hysteria2/WireGuard client powered by sing-box",
   "main": "electron/main.cjs",
   "author": "FIST",
   "license": "MIT",

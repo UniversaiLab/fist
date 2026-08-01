@@ -56,7 +56,7 @@ body {
    normal case for readability. */
 .btn, .tab, .mode-pill, .icon-inline-btn,
 .setting-label, .settings-section-title,
-.main-title, .brand-name, .brand-sub, .brand-tag,
+.main-title, .brand-name, .brand-sub,
 .group-name, .chip, .stat-chip, .q-badge, .badge-live, .badge-rec,
 h3, .empty-state h3, .dash-title h2, .modal h3,
 .ctx-title, .ctx-item, .rec-title, .done-title, .st-label, .metric-label,
@@ -167,11 +167,6 @@ button:disabled { cursor: default; }
   height: 18px;
   object-fit: contain;
 }
-.titlebar-brand-sub {
-  color: var(--brand-red);
-  font-weight: 800;
-}
-
 /* ================= Sidebar ================= */
 .sidebar {
   width: 296px;
@@ -210,17 +205,6 @@ button:disabled { cursor: default; }
   letter-spacing: 0.6px;
   direction: ltr;
   text-align: start;
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-}
-
-.brand-tag {
-  font-style: normal;
-  font-weight: 800;
-  font-size: 10.5px;
-  color: var(--brand-red);
-  letter-spacing: 0.2px;
 }
 
 .brand-sub {
@@ -754,9 +738,21 @@ button:disabled { cursor: default; }
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-end;
   gap: 0;
   overflow: hidden;
+}
+
+/* Everything interactive lives in one compact cluster pinned to the
+   bottom, above the status rail -- keeps the map's middle clear. */
+.stage-controls {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex-shrink: 0;
+  padding: 14px 0 22px;
 }
 
 /* ---- World map backdrop (dotted-map) ----
@@ -791,32 +787,28 @@ button:disabled { cursor: default; }
   background: radial-gradient(circle at 50% 46%, rgba(34, 197, 94, 0.1) 0%, transparent 45%, var(--bg-panel) 92%);
 }
 
-.map-pin-core {
-  fill: var(--idle);
-  transition: fill 0.4s ease;
+/* Region highlight: instead of one big marker, the target country's own
+   dots (see mapCoords.js's bbox + highlightedKeysForCountry) recolor in
+   place -- amber while routing/connecting, green once connected. */
+.map-dot.highlight {
+  fill: var(--warn);
+  filter: drop-shadow(0 0 1.2px var(--warn));
+  animation: map-dot-pulse 2s ease-in-out infinite;
 }
-.map-pin.busy .map-pin-core { fill: var(--warn); }
-.map-pin.connected .map-pin-core { fill: var(--signal); }
-
-.map-pin-wave {
-  fill: none;
-  stroke: var(--idle);
-  stroke-width: 0.3;
-  opacity: 0;
-  transition: stroke 0.4s ease;
+.map-dot.highlight.connected {
+  fill: var(--signal);
+  filter: drop-shadow(0 0 1.2px var(--signal));
+  animation: none;
 }
-.map-pin.busy .map-pin-wave { stroke: var(--warn); animation: map-pin-ping 1.6s ease-out infinite; }
-.map-pin.connected .map-pin-wave { stroke: var(--signal); animation: map-pin-ping 2.4s ease-out infinite; }
-.map-pin-wave-2 { animation-delay: 0.8s !important; }
 
-@keyframes map-pin-ping {
-  0% { opacity: 0.9; transform: scale(0.4); }
-  100% { opacity: 0; transform: scale(2.6); }
+@keyframes map-dot-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
 }
 
 .map-stat-line, .map-loc-line {
   position: absolute;
-  bottom: 28px;
+  top: 22px;
   left: 50%;
   transform: translateX(-50%);
   font-size: 10.5px;
@@ -882,8 +874,8 @@ button:disabled { cursor: default; }
 /* ---- The connect ring ---- */
 .ring-wrap {
   position: relative;
-  width: 236px;
-  height: 236px;
+  width: 128px;
+  height: 128px;
   display: flex;
   align-items: center;
   justify-content: center;
