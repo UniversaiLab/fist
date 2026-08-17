@@ -478,11 +478,39 @@ async function connect(profileId) {
     const preferredHttp = settings.httpPort === socksPort ? settings.httpPort + 1 : settings.httpPort;
     const httpPort = await findFreePort(preferredHttp);
     const apiPort = await findFreePort(API_PORT === socksPort || API_PORT === httpPort ? httpPort + 1 : API_PORT);
+    // Auto-failover tiers: other saved servers, best-protocol-first, so a
+    // censor killing one transport (e.g. throttling UDP and taking out
+    // Hysteria2) moves traffic to a surviving tier without user action.
+    // Deliberately capped -- each tier is a live outbound sing-box probes.
+    let fallbackProfiles;
+    if (settings.autoFallback) {
+      const TIER_ORDER = { hysteria2: 0, vless: 1, trojan: 2, vmess: 3, shadowsocks: 4 };
+      fallbackProfiles = store.get('profiles', [])
+        .filter((p) => p.id !== profileId
+          && p.protocol !== 'mtproto' && p.protocol !== 'wireguard'
+          && p.network !== 'kcp'
+          && p.engine !== 'extension' && p.protocol !== 'extension')
+        .sort((a, b) => (TIER_ORDER[a.protocol] ?? 9) - (TIER_ORDER[b.protocol] ?? 9))
+        .slice(0, 3);
+    }
+
     const config = buildSingboxConfig(profile, {
       socksPort, httpPort, apiPort, mode, logLevel: settings.singboxLogLevel,
       socksHost: settings.socksHost, httpHost: settings.httpHost,
       socksAccounts: settings.socksUsername ? [{ user: settings.socksUsername, pass: settings.socksPassword || '' }] : undefined,
       httpAccounts: settings.httpUsername ? [{ user: settings.httpUsername, pass: settings.httpPassword || '' }] : undefined,
+      // Censorship-resistance layers (see settingsSchema.js).
+      utlsFingerprint: settings.utlsFingerprint,
+      dnsMode: settings.dnsMode,
+      remoteDns: settings.remoteDns,
+      localDns: settings.localDns,
+      dnsStrategy: settings.dnsStrategy,
+      tlsFragment: settings.tlsFragment,
+      routingMode: settings.routingMode,
+      directRuleSets: settings.directRuleSets,
+      blockAds: settings.blockAds,
+      tunStack: settings.tunStack,
+      fallbackProfiles,
     });
     // Connecting only starts the local proxy (sing-box) -- System Proxy is a
     // fully separate, user-controlled toggle (see systemProxy:enable/disable
@@ -1141,7 +1169,21 @@ const LOG_LEVELS = new Set(['none', 'error', 'warn', 'info', 'debug']);
 const BOOLEAN_SETTINGS = new Set([
   'launchOnStartup', 'runLocalProxyOnStartup', 'startMinimized', 'restorePreviousSession',
   'minimizeToTray', 'autoReconnect', 'killSwitchEnabled',
+  'tlsFragment', 'blockAds', 'autoFallback',
 ]);
+// Enumerated censorship-resistance settings -- rejected unless they name a
+// mode the config builder actually understands, so a bad value can never
+// reach sing-box and break the tunnel.
+const ENUM_SETTINGS = {
+  utlsFingerprint: new Set(['none', 'chrome', 'firefox', 'safari', 'ios', 'android', 'edge', 'random']),
+  dnsMode: new Set(['off', 'secure', 'fakeip']),
+  dnsStrategy: new Set(['prefer_ipv4', 'prefer_ipv6', 'ipv4_only', 'ipv6_only']),
+  routingMode: new Set(['global', 'smart']),
+  tunStack: new Set(['mixed', 'system', 'gvisor']),
+};
+// Rule-set names become URLs, so restrict them to the charset the upstream
+// repo actually uses rather than interpolating arbitrary text into a URL.
+const RULE_SET_NAME_RE = /^[a-z0-9][a-z0-9-]{0,40}$/;
 const PORT_SETTINGS = new Set(['socksPort', 'httpPort']);
 const HOST_SETTINGS = new Set(['socksHost', 'httpHost']);
 const TEXT_SETTINGS = new Set(['socksUsername', 'socksPassword', 'httpUsername', 'httpPassword']);
@@ -1177,6 +1219,13 @@ ipcMain.handle('settings:update', async (_e, patch) => {
       if (typeof value !== 'string' || value.length > 256) continue;
     } else if (key === 'customBypass') {
       if (typeof value !== 'string' || value.length > 2000) continue;
+    } else if (ENUM_SETTINGS[key]) {
+      if (!ENUM_SETTINGS[key].has(value)) continue;
+    } else if (key === 'directRuleSets') {
+      if (!Array.isArray(value) || value.length > 12) continue;
+      if (!value.every((n) => typeof n === 'string' && RULE_SET_NAME_RE.test(n))) continue;
+    } else if (key === 'remoteDns' || key === 'localDns') {
+      if (typeof value !== 'string' || value.length > 256 || !value.trim()) continue;
     }
     clean[key] = value;
   }

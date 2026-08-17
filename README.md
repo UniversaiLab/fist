@@ -30,6 +30,8 @@ marketplace prototype.
   so fill in each hop's password/key afterward via Edit.
 - **Kill Switch** — blocks all outbound traffic if the tunnel drops
   unexpectedly, until you reconnect or turn it off.
+- **Censorship resistance** — layered evasion built on sing-box, configurable
+  under Settings → Network. See [Surviving hostile networks](#surviving-hostile-networks).
 - **Subscriptions** — import a subscription URL, auto-update on an interval,
   see per-subscription data-usage/expiry.
 - **`.fist` bundles** — a compact, dependency-free export/import format for
@@ -72,6 +74,42 @@ marketplace prototype.
 | Full **Xray / V2Ray JSON configs** (`{"outbounds":[…]}` — v2rayNG exports, panel output, decrypted NapsternetV configs) | the `proxy` outbound is extracted and mapped onto the matching native outbound; the file's own inbounds/DNS/routing are ignored in favour of the app's settings |
 | Anything else sing-box supports natively (TUIC, Naive, ShadowTLS, AnyTLS, …) | paste sing-box's own outbound JSON as a **raw outbound** |
 | Truly unknown formats | an installed **extension** you choose per-config |
+
+## Surviving hostile networks
+
+Aggressive filtering doesn't just block IPs — it fingerprints TLS handshakes,
+probes servers to see what answers, throttles UDP, and poisons DNS. FIST
+exposes sing-box's countermeasures for each of those, all off-by-default
+except the free one (`utlsFingerprint`), so nothing changes on a normal
+network unless you ask for it.
+
+| Layer | Setting | What it defeats |
+|---|---|---|
+| **TLS fingerprint (uTLS)** | `utlsFingerprint` (default `chrome`) | JA3/JA4 heuristics that flag a stock Go TLS handshake as non-browser traffic |
+| **ClientHello fragmentation** | `tlsFragment` | SNI keyword matching that inspects a single packet |
+| **Encrypted DNS through the tunnel** | `dnsMode: secure` | DNS logging and poisoning by the local resolver |
+| **FakeIP** | `dnsMode: fakeip` | Any DNS leak at all — the OS gets a synthetic `198.18.x.x` answer instantly and the real domain travels inside the tunnel |
+| **DNS hijack (Full Tunnel)** | automatic with `dnsMode` | Apps that hardcode their own resolver and bypass yours |
+| **Smart split routing** | `routingMode: smart` + `directRuleSets` | Keeps domestic banking/government sites on the local network (low latency, no geo-fencing trouble) while everything else is tunnelled |
+| **Automatic failover** | `autoFallback` | A censor killing one transport mid-session |
+
+**Automatic failover** is the part that matters most under active blocking.
+With it on, your other saved servers become live tiers behind a sing-box
+`urltest` group that continuously probes them and routes to whichever is
+healthy. Tiers are ordered Hysteria2 → VLESS/Reality → Trojan/VMess →
+Shadowsocks, which is roughly "fastest" → "hardest to detect" → "hardest to
+block by IP": if UDP gets throttled and Hysteria2 dies, traffic moves to a
+Reality/TCP tier on its own, with no reconnect.
+
+Protocol-wise this maps onto the usual three-tier strategy: **Hysteria2 +
+Salamander** for throughput on lossy links, **VLESS + XTLS-Reality** for
+handshakes that survive active probing, and **VLESS over WebSocket/gRPC
+behind a CDN** for when your server's own IP is blacklisted. FIST doesn't
+invent servers for you — it makes whichever of these you have work together.
+
+Geo rule-sets are fetched *through the tunnel* (`download_detour: proxy`) and
+cached, so a blocked GitHub doesn't break routing and the request doesn't
+reveal which country lists you use.
 
 ## Engines / extensions
 

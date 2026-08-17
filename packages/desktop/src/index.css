@@ -3804,3 +3804,31 @@ kbd {
 .dw-body .mkt-grid { grid-template-columns: 1fr; }
 .dw-body .custom-form-grid { grid-template-columns: 1fr; }
 .killswitch-banner { font-size: 11px; padding: 7px 10px; gap: 7px; }
+
+/* Region chips in the evasion settings */
+.chip-row { display: flex; gap: 5px; flex-wrap: wrap; }
+.chip-row .chip {
+  font-family: inherit;
+  font-size: 10px;
+  padding: 3px 8px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  cursor: pointer;
+}
+.chip-row .chip:hover:not(:disabled) { background: var(--card-hover); color: var(--text); }
+.chip-row .chip.on { color: var(--signal); border-color: var(--signal-dim); background: var(--signal-tint); }
+.chip-row .chip:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.evasion-note {
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+  padding: 7px 9px;
+  margin-top: 4px;
+  background: var(--card);
+  border-inline-start: 2px solid var(--signal-dim);
+  font-size: 11px;
+  color: var(--text-faint);
+  line-height: 1.45;
+}

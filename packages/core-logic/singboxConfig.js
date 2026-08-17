@@ -28,7 +28,15 @@ function transportSettings(p) {
   }
 }
 
-function tlsSettings(p) {
+// Client-side TLS camouflage. Modern DPI fingerprints the ClientHello itself
+// (JA3/JA4) -- a stock Go TLS handshake is trivially distinguishable from a
+// browser and gets flagged regardless of which protocol rides on top. uTLS
+// makes sing-box emit a byte-identical Chrome/Firefox/Safari handshake.
+//
+// `utlsDefault` is applied only when the profile itself doesn't pin a
+// fingerprint, so an explicitly-configured one always wins. Callers that pass
+// nothing (the server tester) keep the original behaviour exactly.
+function tlsSettings(p, utlsDefault) {
   if (p.security !== 'tls' && p.security !== 'reality') return undefined;
   const tls = {
     enabled: true,
@@ -37,6 +45,7 @@ function tlsSettings(p) {
   };
   if (p.alpn) tls.alpn = p.alpn.split(',').map((s) => s.trim()).filter(Boolean);
   if (p.fingerprint) tls.utls = { enabled: true, fingerprint: p.fingerprint };
+  else if (utlsDefault && utlsDefault !== 'none') tls.utls = { enabled: true, fingerprint: utlsDefault };
   if (p.security === 'reality') {
     tls.reality = {
       enabled: true,
@@ -82,7 +91,7 @@ function buildSshJumpOutbounds(jumps) {
   }));
 }
 
-function buildOutbound(p) {
+function buildOutbound(p, utlsDefault) {
   const transport = transportSettings(p);
   switch (p.protocol) {
     case 'vmess':
@@ -94,7 +103,7 @@ function buildOutbound(p) {
         uuid: p.uuid,
         security: p.scy || 'auto',
         alter_id: p.alterId || 0,
-        tls: tlsSettings(p),
+        tls: tlsSettings(p, utlsDefault),
         transport,
       };
     case 'vless':
@@ -106,7 +115,7 @@ function buildOutbound(p) {
         uuid: p.uuid,
         flow: p.flow || undefined,
         packet_encoding: 'xudp',
-        tls: tlsSettings(p),
+        tls: tlsSettings(p, utlsDefault),
         transport,
       };
     case 'trojan':
@@ -116,7 +125,7 @@ function buildOutbound(p) {
         server: p.address,
         server_port: p.port,
         password: p.password,
-        tls: tlsSettings(p) || { enabled: true, server_name: p.sni || p.address },
+        tls: tlsSettings(p, utlsDefault) || { enabled: true, server_name: p.sni || p.address },
         transport,
       };
     case 'shadowsocks':
@@ -156,7 +165,7 @@ function buildOutbound(p) {
         ...(p.username ? { username: p.username } : {}),
         ...(p.password ? { password: p.password } : {}),
         ...(p.protocol === 'http' && p.security === 'tls'
-          ? { tls: tlsSettings(p) || { enabled: true, server_name: p.sni || p.address } }
+          ? { tls: tlsSettings(p, utlsDefault) || { enabled: true, server_name: p.sni || p.address } }
           : {}),
       };
     case 'hysteria2': {
@@ -166,7 +175,7 @@ function buildOutbound(p) {
         server: p.address,
         server_port: p.port,
         password: p.password,
-        tls: tlsSettings({ ...p, security: 'tls' }) || { enabled: true, server_name: p.sni || p.address, insecure: !!p.allowInsecure },
+        tls: tlsSettings({ ...p, security: 'tls' }, utlsDefault) || { enabled: true, server_name: p.sni || p.address, insecure: !!p.allowInsecure },
       };
       if (p.obfsPassword) out.obfs = { type: 'salamander', password: p.obfsPassword };
       if (p.upMbps) out.up_mbps = Number(p.upMbps);
@@ -220,6 +229,161 @@ function buildWireguardEndpoint(p) {
   };
 }
 
+// ---- Censorship-resistance layers ----
+//
+// Everything below is opt-in through `opts`. With no options passed the
+// generated config is byte-for-byte what it was before, which is what keeps
+// the server tester (serverTest.cjs) on its original lightweight path.
+
+// Official sing-box rule-sets. Fetched through the tunnel (`download_detour:
+// proxy`) rather than directly: in a censored network raw.githubusercontent
+// is usually blocked, and pulling them in the clear would also leak exactly
+// which geo lists this client cares about.
+const RULE_SET_BASE = 'https://raw.githubusercontent.com/SagerNet';
+
+function geoRuleSet(kind, name) {
+  // kind: 'geosite' | 'geoip'
+  return {
+    tag: `${kind}-${name}`,
+    type: 'remote',
+    format: 'binary',
+    url: `${RULE_SET_BASE}/sing-${kind}/rule-set/${kind}-${name}.srs`,
+    download_detour: 'proxy',
+    update_interval: '168h',
+  };
+}
+
+// Translate a resolver written as a plain address or URL into sing-box's
+// typed DNS-server shape (`{type, server, server_port, path}`).
+function dnsServerSpec(address) {
+  const raw = String(address || '').trim();
+  const m = raw.match(/^([a-z0-9+]+):\/\/([^/]+)(\/.*)?$/i);
+  if (!m) {
+    // Bare IP/hostname, optionally with a port. IPv6 literals contain colons
+    // themselves, so only split on the last one when it looks like a port.
+    const bare = raw.match(/^\[([^\]]+)\](?::(\d+))?$/) || raw.match(/^([^:]+):(\d+)$/);
+    if (bare) {
+      const spec = { type: 'udp', server: bare[1] };
+      if (bare[2]) spec.server_port = Number(bare[2]);
+      return spec;
+    }
+    return { type: 'udp', server: raw };
+  }
+  const scheme = m[1].toLowerCase();
+  const hostPort = m[2];
+  const path = m[3] || '';
+  const hp = hostPort.match(/^\[([^\]]+)\](?::(\d+))?$/) || hostPort.match(/^([^:]+)(?::(\d+))?$/);
+  const host = hp ? hp[1] : hostPort;
+  const port = hp && hp[2] ? Number(hp[2]) : undefined;
+  const spec = { type: scheme === 'dot' ? 'tls' : scheme, server: host };
+  if (port) spec.server_port = port;
+  if ((scheme === 'https' || scheme === 'h3') && path && path !== '/') spec.path = path;
+  return spec;
+}
+
+// DNS is where most "working" tunnels actually leak. Resolving locally tells
+// the ISP every domain you visit before the tunnel is even used, and lets
+// them poison answers. Three modes:
+//
+//   off    - no dns block at all (previous behaviour)
+//   secure - resolve everything over DoH *through the tunnel*
+//   fakeip - as above, plus hand the OS a synthetic IP immediately and carry
+//            the real domain inside the tunnel, so no lookup ever escapes
+//            and connection setup doesn't wait on a round trip
+function buildDnsConfig(opts) {
+  const mode = opts.dnsMode || 'off';
+  if (mode === 'off') return undefined;
+
+  const remote = opts.remoteDns || 'https://1.1.1.1/dns-query';
+  const local = opts.localDns || '223.5.5.5';
+
+  // sing-box 1.12 replaced the old `address: "<url>"` server shape with typed
+  // servers, and deprecated the legacy form for removal in 1.14 -- emit the
+  // modern schema so this keeps working across engine upgrades.
+  const servers = [
+    { ...dnsServerSpec(remote), tag: 'dns-remote', detour: 'proxy' },
+    { ...dnsServerSpec(local), tag: 'dns-direct', detour: 'direct' },
+  ];
+  const rules = [];
+
+  // Domestic domains resolve on the local resolver so banking/government
+  // sites that geo-fence on resolver location keep working.
+  if (opts.directRuleSets && opts.directRuleSets.length) {
+    rules.push({ rule_set: opts.directRuleSets.map((n) => `geosite-${n}`), server: 'dns-direct' });
+  }
+
+  if (mode === 'fakeip') {
+    servers.push({
+      type: 'fakeip', tag: 'dns-fake',
+      inet4_range: '198.18.0.0/15', inet6_range: 'fc00::/18',
+    });
+    rules.push({ query_type: ['A', 'AAAA'], server: 'dns-fake' });
+  }
+
+  const dns = {
+    servers,
+    rules,
+    final: 'dns-remote',
+    strategy: opts.dnsStrategy || 'prefer_ipv4',
+    // Keeps fake-IP answers from bleeding into real-resolution caching.
+    independent_cache: true,
+  };
+  return dns;
+}
+
+function buildRouteConfig(profile, opts, hasProxy) {
+  const rules = [
+    // Sniffing has to come first: it recovers the real destination domain
+    // from TLS SNI / HTTP Host, which every domain-based rule below depends
+    // on -- and under FakeIP it's the only way to know where a synthetic
+    // 198.18.x.x address was actually meant to go.
+    { action: 'sniff' },
+  ];
+
+  // In TUN mode the OS sends DNS to whatever resolver it was handed; hijack
+  // it into our own DNS block so nothing escapes to the ISP resolver.
+  if (opts.mode === 'tun' && (opts.dnsMode || 'off') !== 'off') {
+    rules.push({ protocol: 'dns', action: 'hijack-dns' });
+  }
+
+  // Fragmenting the ClientHello across TCP segments splits the SNI so a DPI
+  // box doing simple string matching on a single packet cannot see it. Cheap,
+  // and effective against SNI blocklists specifically.
+  if (opts.tlsFragment) {
+    rules.push({ action: 'route-options', tls_fragment: true, tls_fragment_fallback_delay: '500ms' });
+  }
+
+  rules.push({ ip_is_private: true, outbound: 'direct' });
+
+  const ruleSets = [];
+  if (opts.routingMode === 'smart' && hasProxy) {
+    // Split tunnelling: domestic traffic stays on the local network (fast,
+    // and avoids tripping fraud detection on banking sites), everything else
+    // goes through the tunnel via `final` below.
+    for (const name of opts.directRuleSets || []) {
+      ruleSets.push(geoRuleSet('geosite', name));
+      ruleSets.push(geoRuleSet('geoip', name));
+      rules.push({ rule_set: [`geosite-${name}`, `geoip-${name}`], outbound: 'direct' });
+    }
+    if (opts.blockAds) {
+      ruleSets.push(geoRuleSet('geosite', 'category-ads-all'));
+      rules.push({ rule_set: ['geosite-category-ads-all'], outbound: 'block' });
+    }
+  }
+
+  const route = {
+    rules,
+    final: hasProxy ? (opts.finalOutbound || 'proxy') : 'direct',
+    auto_detect_interface: true,
+  };
+  // Which resolver the engine itself uses to resolve outbound server names.
+  // Pinned to the direct resolver so bootstrapping the tunnel never depends
+  // on the tunnel already being up.
+  if ((opts.dnsMode || 'off') !== 'off') route.default_domain_resolver = 'dns-direct';
+  if (ruleSets.length) route.rule_set = ruleSets;
+  return route;
+}
+
 function buildSingboxConfig(profile, opts = {}) {
   const socksPort = opts.socksPort || 10808;
   const httpPort = opts.httpPort || 10809;
@@ -250,11 +414,19 @@ function buildSingboxConfig(profile, opts = {}) {
       // renderer -- guarded so this module still loads there (mobile has its
       // own native VPN path and never actually hits TUN mode through here).
       interface_name: (typeof process !== 'undefined' && process.platform === 'win32') ? undefined : 'scTun0',
-      address: ['172.19.0.1/30'],
+      // FakeIP hands out addresses from 198.18.0.0/15, so the TUN device has
+      // to actually own that range or the OS has nowhere to route them.
+      address: (opts.dnsMode === 'fakeip')
+        ? ['172.19.0.1/30', '198.18.0.1/15']
+        : ['172.19.0.1/30'],
       mtu: 1500,
       auto_route: true,
       strict_route: true,
-      stack: 'system',
+      // gVisor's userspace netstack (this build has with_gvisor) survives
+      // hostile/lossy links better than the system stack and doesn't need the
+      // host's TCP stack to cooperate; 'system' stays available as a fallback
+      // for anyone who hits compatibility trouble.
+      stack: opts.tunStack || 'mixed',
     });
   }
 
@@ -266,11 +438,45 @@ function buildSingboxConfig(profile, opts = {}) {
     { type: 'block', tag: 'block' },
   ];
   if (hasJumps) {
-    const mainOutbound = buildOutbound(profile);
+    const mainOutbound = buildOutbound(profile, opts.utlsFingerprint);
     mainOutbound.detour = `jump${profile.jumps.length - 1}`;
     outbounds.unshift(mainOutbound, ...buildSshJumpOutbounds(profile.jumps));
   } else if (!isWireguard) {
-    outbounds.unshift(buildOutbound(profile));
+    outbounds.unshift(buildOutbound(profile, opts.utlsFingerprint));
+  }
+
+  // Multi-tier failover: extra profiles become their own outbounds behind a
+  // `urltest` group that continuously probes them and routes to whichever is
+  // currently alive. This is what survives a censor switching tactics
+  // mid-session -- e.g. UDP gets throttled and Hysteria2 dies, so traffic
+  // moves to a Reality/TCP tier without the user touching anything.
+  let finalTag = null;
+  const tiers = Array.isArray(opts.fallbackProfiles) ? opts.fallbackProfiles : [];
+  if (tiers.length && !isWireguard) {
+    const tierTags = ['proxy'];
+    tiers.forEach((tp, i) => {
+      let ob;
+      try {
+        ob = buildOutbound(tp, opts.utlsFingerprint);
+      } catch {
+        return; // a tier we can't express (kcp, mtproto) just isn't offered
+      }
+      ob.tag = `tier${i + 1}`;
+      tierTags.push(ob.tag);
+      outbounds.push(ob);
+    });
+    if (tierTags.length > 1) {
+      outbounds.push({
+        type: 'urltest',
+        tag: 'auto',
+        outbounds: tierTags,
+        url: opts.probeUrl || 'https://www.gstatic.com/generate_204',
+        interval: opts.probeInterval || '3m',
+        tolerance: 50,
+        idle_timeout: '30m',
+      });
+      finalTag = 'auto';
+    }
   }
 
   const config = {
@@ -278,17 +484,11 @@ function buildSingboxConfig(profile, opts = {}) {
     log: opts.logLevel === 'none' ? { disabled: true } : { level: opts.logLevel || 'warn', timestamp: true },
     inbounds,
     outbounds,
-    route: {
-      // Protocol sniffing (destination-domain detection for routing) moved from
-      // a per-inbound `sniff` flag to a rule action as of sing-box 1.13.
-      rules: [
-        { action: 'sniff' },
-        { ip_is_private: true, outbound: 'direct' },
-      ],
-      final: 'proxy',
-      auto_detect_interface: true,
-    },
+    route: buildRouteConfig(profile, { ...opts, mode, finalOutbound: finalTag || opts.finalOutbound }, true),
   };
+
+  const dns = buildDnsConfig(opts);
+  if (dns) config.dns = dns;
 
   if (isWireguard) config.endpoints = [buildWireguardEndpoint(profile)];
 

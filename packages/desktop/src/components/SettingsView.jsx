@@ -4,6 +4,7 @@ import CoreLogic from '@soul-connection/core-logic';
 const { formatBytes } = CoreLogic;
 import { Section, Toggle } from './settingsPrimitives.jsx';
 import NetworkSettings from './NetworkSettings.jsx';
+import EvasionSettings from './EvasionSettings.jsx';
 
 const INTERVAL_OPTIONS = [
   { value: 0, label: 'Off' },
@@ -105,6 +106,14 @@ export default function SettingsView({
         </div>
       </Section>
       </>)}
+
+      {showNetwork && (
+        <EvasionSettings
+          settings={settings}
+          connectionState={connectionState}
+          onUpdate={onUpdate}
+        />
+      )}
 
       {showNetwork && (
         <NetworkSettings
