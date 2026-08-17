@@ -36,7 +36,7 @@ function transportSettings(p) {
 // `utlsDefault` is applied only when the profile itself doesn't pin a
 // fingerprint, so an explicitly-configured one always wins. Callers that pass
 // nothing (the server tester) keep the original behaviour exactly.
-function tlsSettings(p, utlsDefault) {
+function tlsSettings(p, utlsDefault, tlsOpts) {
   if (p.security !== 'tls' && p.security !== 'reality') return undefined;
   const tls = {
     enabled: true,
@@ -54,6 +54,18 @@ function tlsSettings(p, utlsDefault) {
     };
     // Reality requires a uTLS fingerprint; default to chrome if none was given.
     if (!tls.utls) tls.utls = { enabled: true, fingerprint: 'chrome' };
+  }
+  // TLS-handshake fragmentation, applied at the outbound (not the route
+  // action). record_fragment is the cheaper/preferred one per the docs;
+  // `fragment` splits at the TCP layer and costs latency. Reality does its own
+  // handshake shaping, so we never fragment on top of it.
+  if (tlsOpts && p.security !== 'reality') {
+    if (tlsOpts.recordFragment) tls.record_fragment = true;
+    if (tlsOpts.fragment) { tls.fragment = true; tls.fragment_fallback_delay = '500ms'; }
+    // ECH encrypts the ClientHello (SNI included), so a censor whitelisting by
+    // server name sees nothing to match. Needs server-published ECH config;
+    // opt-in because a server without it will reject the handshake.
+    if (tlsOpts.ech) tls.ech = { enabled: true };
   }
   return tls;
 }
@@ -91,7 +103,47 @@ function buildSshJumpOutbounds(jumps) {
   }));
 }
 
-function buildOutbound(p, utlsDefault) {
+// Protocols that carry a sing-box `multiplex` block. Hysteria2/TUIC do their
+// own stream management, and ssh/wireguard/socks/http have no mux concept --
+// applying it to those is a config error, so mux is silently skipped for them.
+const MUX_PROTOCOLS = new Set(['vless', 'vmess', 'trojan', 'shadowsocks']);
+
+// Multiplexing carries many logical streams over one real connection, so a
+// censor sees a single long-lived TLS session instead of a burst of new ones
+// (fewer handshakes to fingerprint), and TCP Brutal layers a custom
+// congestion-control on top that brute-forces throughput on lossy, high-RTT
+// international links -- the "maximum throughput" tier. Both REQUIRE the
+// server to have mux/brutal enabled too, which is why this is opt-in: turning
+// it on against a server that doesn't support it breaks the connection.
+function muxBlock(opts) {
+  const m = opts.mux;
+  if (!m || !m.enabled) return undefined;
+  const block = {
+    enabled: true,
+    protocol: m.protocol || 'h2mux',
+    padding: !!m.padding,
+  };
+  if (m.maxConnections) block.max_connections = Number(m.maxConnections);
+  // Brutal needs both directions declared (Mbps) to size its controller.
+  if (m.brutalUp && m.brutalDown) {
+    block.brutal = { enabled: true, up_mbps: Number(m.brutalUp), down_mbps: Number(m.brutalDown) };
+  }
+  return block;
+}
+
+function applyPerConnEvasion(out, p, opts) {
+  const mux = muxBlock(opts);
+  if (mux && MUX_PROTOCOLS.has(p.protocol)) out.multiplex = mux;
+  // UDP-over-TCP tunnels UDP inside the TCP stream, so a network that
+  // throttles or drops UDP wholesale can't touch it. sing-box only accepts it
+  // on shadowsocks; other protocols carry UDP their own way.
+  if (opts.udpOverTcp && p.protocol === 'shadowsocks') {
+    out.udp_over_tcp = { enabled: true, version: 2 };
+  }
+  return out;
+}
+
+function buildOutbound(p, utlsDefault, tlsOpts) {
   const transport = transportSettings(p);
   switch (p.protocol) {
     case 'vmess':
@@ -103,7 +155,7 @@ function buildOutbound(p, utlsDefault) {
         uuid: p.uuid,
         security: p.scy || 'auto',
         alter_id: p.alterId || 0,
-        tls: tlsSettings(p, utlsDefault),
+        tls: tlsSettings(p, utlsDefault, tlsOpts),
         transport,
       };
     case 'vless':
@@ -115,7 +167,7 @@ function buildOutbound(p, utlsDefault) {
         uuid: p.uuid,
         flow: p.flow || undefined,
         packet_encoding: 'xudp',
-        tls: tlsSettings(p, utlsDefault),
+        tls: tlsSettings(p, utlsDefault, tlsOpts),
         transport,
       };
     case 'trojan':
@@ -125,7 +177,7 @@ function buildOutbound(p, utlsDefault) {
         server: p.address,
         server_port: p.port,
         password: p.password,
-        tls: tlsSettings(p, utlsDefault) || { enabled: true, server_name: p.sni || p.address },
+        tls: tlsSettings(p, utlsDefault, tlsOpts) || { enabled: true, server_name: p.sni || p.address },
         transport,
       };
     case 'shadowsocks':
@@ -165,7 +217,7 @@ function buildOutbound(p, utlsDefault) {
         ...(p.username ? { username: p.username } : {}),
         ...(p.password ? { password: p.password } : {}),
         ...(p.protocol === 'http' && p.security === 'tls'
-          ? { tls: tlsSettings(p, utlsDefault) || { enabled: true, server_name: p.sni || p.address } }
+          ? { tls: tlsSettings(p, utlsDefault, tlsOpts) || { enabled: true, server_name: p.sni || p.address } }
           : {}),
       };
     case 'hysteria2': {
@@ -175,7 +227,7 @@ function buildOutbound(p, utlsDefault) {
         server: p.address,
         server_port: p.port,
         password: p.password,
-        tls: tlsSettings({ ...p, security: 'tls' }, utlsDefault) || { enabled: true, server_name: p.sni || p.address, insecure: !!p.allowInsecure },
+        tls: tlsSettings({ ...p, security: 'tls' }, utlsDefault, tlsOpts) || { enabled: true, server_name: p.sni || p.address, insecure: !!p.allowInsecure },
       };
       if (p.obfsPassword) out.obfs = { type: 'salamander', password: p.obfsPassword };
       if (p.upMbps) out.up_mbps = Number(p.upMbps);
@@ -437,12 +489,17 @@ function buildSingboxConfig(profile, opts = {}) {
     { type: 'direct', tag: 'direct' },
     { type: 'block', tag: 'block' },
   ];
+  const tlsOpts = {
+    fragment: !!opts.tlsHandshakeFragment,
+    recordFragment: !!opts.tlsRecordFragment,
+    ech: !!opts.ech,
+  };
   if (hasJumps) {
-    const mainOutbound = buildOutbound(profile, opts.utlsFingerprint);
+    const mainOutbound = applyPerConnEvasion(buildOutbound(profile, opts.utlsFingerprint, tlsOpts), profile, opts);
     mainOutbound.detour = `jump${profile.jumps.length - 1}`;
     outbounds.unshift(mainOutbound, ...buildSshJumpOutbounds(profile.jumps));
   } else if (!isWireguard) {
-    outbounds.unshift(buildOutbound(profile, opts.utlsFingerprint));
+    outbounds.unshift(applyPerConnEvasion(buildOutbound(profile, opts.utlsFingerprint, tlsOpts), profile, opts));
   }
 
   // Multi-tier failover: extra profiles become their own outbounds behind a
@@ -457,7 +514,7 @@ function buildSingboxConfig(profile, opts = {}) {
     tiers.forEach((tp, i) => {
       let ob;
       try {
-        ob = buildOutbound(tp, opts.utlsFingerprint);
+        ob = applyPerConnEvasion(buildOutbound(tp, opts.utlsFingerprint, tlsOpts), tp, opts);
       } catch {
         return; // a tier we can't express (kcp, mtproto) just isn't offered
       }

@@ -511,6 +511,19 @@ async function connect(profileId) {
       blockAds: settings.blockAds,
       tunStack: settings.tunStack,
       fallbackProfiles,
+      // Advanced power features (require server support; off by default).
+      mux: settings.muxEnabled ? {
+        enabled: true,
+        protocol: settings.muxProtocol,
+        padding: settings.muxPadding,
+        maxConnections: settings.muxMaxConnections,
+        brutalUp: settings.brutalUpMbps,
+        brutalDown: settings.brutalDownMbps,
+      } : undefined,
+      udpOverTcp: settings.udpOverTcp,
+      tlsRecordFragment: settings.tlsRecordFragment,
+      tlsHandshakeFragment: settings.tlsHandshakeFragment,
+      ech: settings.ech,
     });
     // Connecting only starts the local proxy (sing-box) -- System Proxy is a
     // fully separate, user-controlled toggle (see systemProxy:enable/disable
@@ -1170,7 +1183,15 @@ const BOOLEAN_SETTINGS = new Set([
   'launchOnStartup', 'runLocalProxyOnStartup', 'startMinimized', 'restorePreviousSession',
   'minimizeToTray', 'autoReconnect', 'killSwitchEnabled',
   'tlsFragment', 'blockAds', 'autoFallback',
+  'muxEnabled', 'muxPadding', 'udpOverTcp', 'tlsRecordFragment', 'tlsHandshakeFragment', 'ech',
 ]);
+// Bandwidth caps for TCP Brutal / mux connection count: non-negative integers
+// with a sane ceiling so a typo can't ask sing-box for absurd values.
+const NUMERIC_SETTINGS = {
+  brutalUpMbps: 10000,
+  brutalDownMbps: 10000,
+  muxMaxConnections: 64,
+};
 // Enumerated censorship-resistance settings -- rejected unless they name a
 // mode the config builder actually understands, so a bad value can never
 // reach sing-box and break the tunnel.
@@ -1180,6 +1201,7 @@ const ENUM_SETTINGS = {
   dnsStrategy: new Set(['prefer_ipv4', 'prefer_ipv6', 'ipv4_only', 'ipv6_only']),
   routingMode: new Set(['global', 'smart']),
   tunStack: new Set(['mixed', 'system', 'gvisor']),
+  muxProtocol: new Set(['h2mux', 'smux', 'yamux']),
 };
 // Rule-set names become URLs, so restrict them to the charset the upstream
 // repo actually uses rather than interpolating arbitrary text into a URL.
@@ -1226,6 +1248,8 @@ ipcMain.handle('settings:update', async (_e, patch) => {
       if (!value.every((n) => typeof n === 'string' && RULE_SET_NAME_RE.test(n))) continue;
     } else if (key === 'remoteDns' || key === 'localDns') {
       if (typeof value !== 'string' || value.length > 256 || !value.trim()) continue;
+    } else if (NUMERIC_SETTINGS[key]) {
+      if (typeof value !== 'number' || !Number.isInteger(value) || value < 0 || value > NUMERIC_SETTINGS[key]) continue;
     }
     clean[key] = value;
   }

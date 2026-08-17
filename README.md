@@ -92,6 +92,10 @@ network unless you ask for it.
 | **DNS hijack (Full Tunnel)** | automatic with `dnsMode` | Apps that hardcode their own resolver and bypass yours |
 | **Smart split routing** | `routingMode: smart` + `directRuleSets` | Keeps domestic banking/government sites on the local network (low latency, no geo-fencing trouble) while everything else is tunnelled |
 | **Automatic failover** | `autoFallback` | A censor killing one transport mid-session |
+| **Stream multiplexing + TCP Brutal** | `muxEnabled` / `brutalUpMbps`+`brutalDownMbps` | Many streams over one session (fewer handshakes to fingerprint); Brutal brute-forces throughput on lossy, high-RTT links |
+| **UDP over TCP** | `udpOverTcp` | UDP throttling/blocking (Shadowsocks) |
+| **Encrypted SNI (ECH)** | `ech` | Server-name whitelisting — the SNI is encrypted in the handshake |
+| **TLS record fragmentation** | `tlsRecordFragment` | Single-packet DPI reading the TLS handshake |
 
 **Automatic failover** is the part that matters most under active blocking.
 With it on, your other saved servers become live tiers behind a sing-box
@@ -106,6 +110,15 @@ Salamander** for throughput on lossy links, **VLESS + XTLS-Reality** for
 handshakes that survive active probing, and **VLESS over WebSocket/gRPC
 behind a CDN** for when your server's own IP is blacklisted. FIST doesn't
 invent servers for you — it makes whichever of these you have work together.
+
+The **Advanced** group (multiplexing, TCP Brutal, UDP-over-TCP, ECH, TLS
+record fragmentation) is off by default and **requires the server to be
+configured for it** — enabling any of these against a server that isn't will
+break that connection, so they're deliberately opt-in and clearly labelled as
+such in the UI. Each is also protocol-guarded: mux is only emitted for
+vless/vmess/trojan/shadowsocks, UDP-over-TCP only for shadowsocks, and
+fragmentation is never layered on top of Reality (which shapes its own
+handshake).
 
 Geo rule-sets are fetched *through the tunnel* (`download_detour: proxy`) and
 cached, so a blocked GitHub doesn't break routing and the request doesn't

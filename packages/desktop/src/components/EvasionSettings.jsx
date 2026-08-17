@@ -200,6 +200,86 @@ export default function EvasionSettings({ settings, connectionState, onUpdate })
       </Section>
 
       <Section
+        title="Advanced (needs server support)"
+        icon="sliders"
+        description="High-power sing-box features — only enable these if your server is configured for them, or the connection will fail"
+      >
+        <Toggle
+          label="Stream multiplexing"
+          hint="Carries many streams over one connection, so a censor sees a single long-lived session instead of a burst of new handshakes"
+          checked={!!settings.muxEnabled}
+          onChange={(v) => onUpdate({ muxEnabled: v })}
+        />
+        {settings.muxEnabled && (
+          <>
+            <div className="setting-row">
+              <div className="setting-text">
+                <span className="setting-label">Mux protocol</span>
+              </div>
+              <select
+                className="setting-select"
+                value={settings.muxProtocol}
+                onChange={(e) => onUpdate({ muxProtocol: e.target.value })}
+                disabled={locked}
+              >
+                <option value="h2mux">h2mux</option>
+                <option value="smux">smux</option>
+                <option value="yamux">yamux</option>
+              </select>
+            </div>
+            <Toggle
+              label="TCP Brutal"
+              hint="Custom congestion control that brute-forces throughput on lossy, high-latency international links. Set your real line speed below."
+              checked={settings.brutalDownMbps > 0}
+              onChange={(v) => onUpdate(v
+                ? { brutalUpMbps: settings.brutalUpMbps || 50, brutalDownMbps: settings.brutalDownMbps || 100 }
+                : { brutalUpMbps: 0, brutalDownMbps: 0 })}
+            />
+            {settings.brutalDownMbps > 0 && (
+              <div className="setting-row">
+                <div className="setting-text">
+                  <span className="setting-label">Line speed (Mbps)</span>
+                  <span className="setting-hint">Up / down — set to your actual bandwidth</span>
+                </div>
+                <div className="chip-row">
+                  <input
+                    className="mono num-input" type="number" min={1} max={10000}
+                    value={settings.brutalUpMbps}
+                    onChange={(e) => onUpdate({ brutalUpMbps: Math.max(0, Number(e.target.value) | 0) })}
+                    disabled={locked}
+                  />
+                  <input
+                    className="mono num-input" type="number" min={1} max={10000}
+                    value={settings.brutalDownMbps}
+                    onChange={(e) => onUpdate({ brutalDownMbps: Math.max(0, Number(e.target.value) | 0) })}
+                    disabled={locked}
+                  />
+                </div>
+              </div>
+            )}
+          </>
+        )}
+        <Toggle
+          label="UDP over TCP"
+          hint="Tunnels UDP inside the TCP connection so a network that throttles or blocks UDP can't touch it (Shadowsocks servers only)"
+          checked={!!settings.udpOverTcp}
+          onChange={(v) => onUpdate({ udpOverTcp: v })}
+        />
+        <Toggle
+          label="Encrypted SNI (ECH)"
+          hint="Encrypts the server name in the TLS handshake so name-based whitelisting sees nothing. Requires an ECH-enabled server."
+          checked={!!settings.ech}
+          onChange={(v) => onUpdate({ ech: v })}
+        />
+        <Toggle
+          label="TLS record fragmentation"
+          hint="Splits the TLS record so single-packet inspection can't read the handshake. Lower cost than handshake fragmentation."
+          checked={!!settings.tlsRecordFragment}
+          onChange={(v) => onUpdate({ tlsRecordFragment: v })}
+        />
+      </Section>
+
+      <Section
         title="Resilience"
         icon="bolt"
         description="Staying connected when a server or protocol gets blocked"

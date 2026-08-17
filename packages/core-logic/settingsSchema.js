@@ -50,6 +50,27 @@ const DEFAULT_SETTINGS = {
   tunStack: 'mixed',
   // Auto-failover across other saved servers when the active one dies.
   autoFallback: false,
+
+  // ---- Advanced sing-box power features (all need SERVER support) ----
+  // Off by default: enabling any of these against a server that wasn't set up
+  // for it will break that connection, so they're deliberately opt-in.
+
+  // Multiplex many streams over one connection (fewer handshakes to
+  // fingerprint) + optional TCP Brutal congestion control for throughput on
+  // bad links. Only applies to vless/vmess/trojan/shadowsocks.
+  muxEnabled: false,
+  muxProtocol: 'h2mux',       // 'h2mux' | 'smux' | 'yamux'
+  muxPadding: false,
+  muxMaxConnections: 4,
+  brutalUpMbps: 0,            // 0 = brutal off; both up+down needed to enable
+  brutalDownMbps: 0,
+  // Tunnel UDP inside the TCP stream (shadowsocks only) for UDP-hostile
+  // networks.
+  udpOverTcp: false,
+  // TLS-handshake fragmentation at the outbound and ECH (encrypted SNI).
+  tlsRecordFragment: false,   // preferred, cheaper
+  tlsHandshakeFragment: false,// TCP-level, higher latency
+  ech: false,                 // needs server-published ECH config
 };
 
 module.exports = { DEFAULT_SETTINGS };
