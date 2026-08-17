@@ -36,9 +36,18 @@ marketplace prototype.
   moving many configs at once (see `packages/core-logic/fistFormat.js`).
 - **Server Finder** — batch ping/real-connect/speed tests across your
   configs with a live dashboard, to find the fastest one.
-- **Config marketplace (prototype)** — a client-side "buy/sell configs"
-  mockup, with an optional real backend (`packages/marketplace-server`) that
-  has real accounts/listings/purchases but only ever simulates payment.
+- **Config marketplace** — buy/sell configs, with a backend
+  (`packages/marketplace-server`) providing real accounts, listings,
+  purchases, and a **provider rating system** (1-5 stars, one per buyer per
+  listing, gated on having actually purchased it, aggregated per listing and
+  per creator).
+- **Crypto payments** — real on-chain settlement for config and subscription
+  purchases via [ethers](https://docs.ethers.org/). Each invoice derives its
+  own receiving address from an HD wallet, is quoted in USD and settled in
+  the configured asset, and only releases the config once the payment has
+  the required confirmations. The platform margin on each sale is
+  configurable (`PLATFORM_FEE_BPS`, default 20%). See
+  [Crypto payments](#crypto-payments) below.
 
 ## Supported protocols
 
@@ -78,6 +87,35 @@ a raw sing-box outbound, or hand it to one of your installed extensions.
 Configs added this way show a small badge on their server-list card naming
 the engine that runs them (and flag it in red if that extension has since
 been removed).
+
+---
+
+## Crypto payments
+
+The marketplace settles in crypto when the server is configured for it;
+without that configuration it falls back to the original simulated-payment
+route and says so on `/api/health`.
+
+| Variable | Purpose |
+|---|---|
+| `CRYPTO_MNEMONIC` | HD wallet the per-invoice receiving addresses are derived from (`m/44'/60'/0'/0/<index>`) |
+| `CRYPTO_RPC_URL` | JSON-RPC endpoint used to watch for incoming payments |
+| `CRYPTO_ASSET` | `ETH` (default) or `MATIC` |
+| `CRYPTO_COIN_PRICE_CENTS` | Price of 1 whole coin in USD cents, used to convert listing prices |
+| `PLATFORM_FEE_BPS` | Platform margin in basis points (default `2000` = 20%) |
+
+Flow: `POST /api/payments/invoice` opens an invoice for a listing and returns
+a freshly-derived address plus the exact amount owed;
+`GET /api/payments/invoice/:id` re-checks the chain (poll this);
+`POST /api/payments/invoice/:id/claim` converts a confirmed invoice into a
+purchase and releases the config. Claiming is idempotent, so a double-click
+can't credit the creator twice.
+
+**The server never spends.** It derives receiving addresses and discards the
+private keys immediately, so nothing in the request path holds spending
+authority. Sweeping those addresses into treasury and paying creators out is
+a separate operational step that needs the mnemonic in a signer/HSM — the
+ledger here records what is *owed*, it does not move funds.
 
 ---
 
@@ -205,11 +243,13 @@ each runner first.
 
 ## The marketplace server (optional)
 
-`packages/marketplace-server` is a real backend (accounts, listings,
-purchases, per-creator earnings) for the desktop app's Marketplace tab —
-**payment processing is entirely mocked**, no real money ever moves. It's
-independent of the desktop app; the app's Marketplace tab currently runs
-its own client-side mock data and doesn't call this server yet.
+`packages/marketplace-server` is the backend (accounts, listings, purchases,
+ratings, per-creator earnings, crypto invoices) for the desktop app's
+Marketplace tab. Crypto settlement is real when configured (see
+[Crypto payments](#crypto-payments)); with no crypto config the legacy
+`/api/purchases` route simulates payment instead. The desktop Marketplace tab
+still browses client-side mock listings — the Wallet pane is the part wired
+to this server today.
 
 Requires Bun and a reachable Redis:
 
@@ -224,7 +264,7 @@ Environment variables:
 | Variable | Default | Purpose |
 |---|---|---|
 | `REDIS_URL` | `redis://localhost:6379` (Bun's default) | Redis connection |
-| `JWT_SECRET` | an insecure dev default | HS256 signing key for auth tokens — **set a real secret in production** |
+| `JWT_SECRET` | an insecure dev default | HS256 signing key for auth tokens. With `NODE_ENV=production` the server refuses to start unless this is set to a unique value of at least 32 characters |
 | `PORT` | `4310` | HTTP port |
 
 ---

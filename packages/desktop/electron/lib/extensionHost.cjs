@@ -32,12 +32,40 @@ function extensionsDir(userDataDir) {
   return path.join(userDataDir, 'extensions');
 }
 
+// Extension ids name a directory on disk, and they arrive from two untrusted
+// places: an extension.json we didn't write, and the renderer over IPC. A
+// value like "../../.." would make path.join() escape the extensions folder
+// entirely -- and since both install and remove call fs.rmSync(recursive) on
+// the result, that turns into deleting arbitrary directories. Restrict ids to
+// a flat, boring charset so they can only ever name a direct child.
+const SAFE_ID_RE = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$/;
+
+function isSafeId(id) {
+  return typeof id === 'string' && SAFE_ID_RE.test(id) && id !== '.' && id !== '..';
+}
+
+// Resolve a path that is supposed to live inside `baseDir`, and confirm it
+// really does. Belt-and-braces alongside isSafeId: this also covers the entry
+// script, which is a relative path rather than a flat id, so it can legally
+// contain slashes but still must not climb out (e.g. "../../../../bin/sh").
+function resolveInside(baseDir, relative) {
+  const base = path.resolve(baseDir);
+  const target = path.resolve(base, relative);
+  if (target !== base && !target.startsWith(base + path.sep)) return null;
+  return target;
+}
+
 function readManifest(dir) {
   const manifestPath = path.join(dir, 'extension.json');
   if (!fs.existsSync(manifestPath)) return null;
   try {
     const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
     if (!manifest.id || !manifest.name || !manifest.entry) return null;
+    if (!isSafeId(manifest.id)) return null;
+    // The entry script must resolve to something inside the extension's own
+    // folder; a manifest pointing at an arbitrary system binary is rejected
+    // outright rather than spawned.
+    if (typeof manifest.entry !== 'string' || !resolveInside(dir, manifest.entry)) return null;
     return { ...manifest, dir };
   } catch {
     return null;
@@ -68,7 +96,11 @@ function installExtension(userDataDir, sourceDir) {
   const entryPath = path.join(sourceDir, manifest.entry);
   if (!fs.existsSync(entryPath)) throw new Error(`Entry script "${manifest.entry}" not found in that folder`);
 
-  const destDir = path.join(extensionsDir(userDataDir), manifest.id);
+  // readManifest already rejected unsafe ids, but this is the call that does
+  // a recursive delete, so re-derive the destination defensively rather than
+  // trusting the id to have been checked upstream.
+  const destDir = resolveInside(extensionsDir(userDataDir), manifest.id);
+  if (!destDir) throw new Error('That extension has an invalid id');
   fs.rmSync(destDir, { recursive: true, force: true });
   fs.mkdirSync(destDir, { recursive: true });
   fs.cpSync(sourceDir, destDir, { recursive: true });
@@ -76,7 +108,12 @@ function installExtension(userDataDir, sourceDir) {
 }
 
 function removeExtension(userDataDir, id) {
-  const dir = path.join(extensionsDir(userDataDir), id);
+  // `id` arrives straight from the renderer over IPC. Without this check a
+  // caller could pass "../../.." and have us recursively delete directories
+  // well outside the extensions folder.
+  if (!isSafeId(id)) throw new Error('Invalid extension id');
+  const dir = resolveInside(extensionsDir(userDataDir), id);
+  if (!dir) throw new Error('Invalid extension id');
   fs.rmSync(dir, { recursive: true, force: true });
 }
 
@@ -87,8 +124,11 @@ function parseWithExtension(userDataDir, extensionId, text) {
   const manifest = getExtension(userDataDir, extensionId);
   if (!manifest) throw new Error('Extension not found');
 
+  const entryPath = resolveInside(manifest.dir, manifest.entry);
+  if (!entryPath) throw new Error('Extension entry script is outside its own folder');
+
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [path.join(manifest.dir, manifest.entry)], {
+    const child = spawn(process.execPath, [entryPath], {
       cwd: manifest.dir,
       stdio: ['pipe', 'pipe', 'pipe'],
       env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
@@ -158,7 +198,10 @@ class ExtensionEngine extends EventEmitter {
     const manifest = getExtension(this.userDataDir, this.extensionId);
     if (!manifest) throw new Error('Extension not found');
 
-    this.child = spawn(process.execPath, [path.join(manifest.dir, manifest.entry)], {
+    const entryPath = resolveInside(manifest.dir, manifest.entry);
+    if (!entryPath) throw new Error('Extension entry script is outside its own folder');
+
+    this.child = spawn(process.execPath, [entryPath], {
       cwd: manifest.dir,
       stdio: ['pipe', 'pipe', 'pipe'],
       env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },

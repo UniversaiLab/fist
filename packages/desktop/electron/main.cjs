@@ -309,10 +309,15 @@ const APP_ICON_PATH = path.join(__dirname, 'assets', 'icon.ico');
 
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 880,
-    height: 880,
-    minWidth: 720,
-    minHeight: 720,
+    // Compact utility-window proportions, like the mainstream VPN clients:
+    // a narrow always-at-hand panel rather than a full desktop app window.
+    // The locations list and the settings panes are overlays inside this
+    // footprint instead of side-by-side columns.
+    width: 380,
+    height: 640,
+    minWidth: 360,
+    minHeight: 560,
+    maxWidth: 520,
     backgroundColor: '#0a0d13',
     autoHideMenuBar: true,
     icon: APP_ICON_PATH,
@@ -328,7 +333,8 @@ function createWindow() {
   });
 
   mainWindow.setMenuBarVisibility(false);
-  mainWindow.setAspectRatio(1); // the UI is designed as a 1:1 square, restored on unmaximize/leave-fullscreen below
+  // No aspect lock: the compact layout is a tall panel that stretches
+  // vertically, not the old 1:1 square.
 
   mainWindow.once('ready-to-show', () => {
     const settings = getSettings();
@@ -347,9 +353,30 @@ function createWindow() {
   const indexPath = path.join(__dirname, '..', 'dist', 'index.html');
   mainWindow.loadFile(indexPath);
 
+  // Hand off to the real browser, but only for schemes that are safe to pass
+  // to the OS. shell.openExternal will happily act on file:// (and on Windows
+  // UNC paths), which would let attacker-influenced text in the renderer --
+  // a config name, a marketplace listing, an extension description -- launch
+  // a local file. Anything that isn't plain web/mail is dropped.
+  const EXTERNAL_SCHEMES = new Set(['http:', 'https:', 'mailto:']);
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url);
+    try {
+      if (EXTERNAL_SCHEMES.has(new URL(url).protocol)) shell.openExternal(url);
+    } catch { /* unparseable URL -- ignore */ }
     return { action: 'deny' };
+  });
+
+  // The renderer only ever loads our own bundled index.html. Any attempt to
+  // navigate it somewhere else (an injected link, a redirect) would replace
+  // the trusted origin that holds the IPC bridge, so refuse and send it to
+  // the browser instead.
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    if (url !== mainWindow.webContents.getURL()) {
+      event.preventDefault();
+      try {
+        if (EXTERNAL_SCHEMES.has(new URL(url).protocol)) shell.openExternal(url);
+      } catch { /* unparseable URL -- ignore */ }
+    }
   });
 
   const sendWindowState = () => {
@@ -360,12 +387,10 @@ function createWindow() {
       });
     }
   };
-  // Maximize/fullscreen fill the whole screen, so the 1:1 lock has to relax
-  // for that duration and snap back the moment the window is a normal square again.
-  mainWindow.on('maximize', () => { mainWindow.setAspectRatio(0); sendWindowState(); });
-  mainWindow.on('unmaximize', () => { mainWindow.setAspectRatio(1); sendWindowState(); });
-  mainWindow.on('enter-full-screen', () => { mainWindow.setAspectRatio(0); sendWindowState(); });
-  mainWindow.on('leave-full-screen', () => { mainWindow.setAspectRatio(1); sendWindowState(); });
+  mainWindow.on('maximize', sendWindowState);
+  mainWindow.on('unmaximize', sendWindowState);
+  mainWindow.on('enter-full-screen', sendWindowState);
+  mainWindow.on('leave-full-screen', sendWindowState);
   mainWindow.webContents.once('did-finish-load', sendWindowState);
 
   mainWindow.on('close', (e) => {
