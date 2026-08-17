@@ -777,7 +777,10 @@ ipcMain.handle('profiles:addFile', async (_e) => {
   const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow, {
     title: 'Import Config File',
     filters: [
-      { name: 'Supported configs', extensions: ['fist', 'conf', 'txt'] },
+      // npvt/npv4/inpv are NapsternetV exports -- readable when they're a
+      // plain-text export, and given a specific explanation when they're the
+      // app's encrypted container (see parseNapsternetFile).
+      { name: 'Supported configs', extensions: ['fist', 'conf', 'txt', 'json', 'npvt', 'npv4', 'inpv'] },
       { name: 'All files', extensions: ['*'] },
     ],
     properties: ['openFile'],
@@ -791,6 +794,10 @@ ipcMain.handle('profiles:addFile', async (_e) => {
     throw new Error('Could not read the selected file');
   }
 
+  // parseConfigText throws its own specific message for formats we recognise
+  // but cannot decode (an encrypted NapsternetV file being the case that
+  // motivated this) -- let that reach the user instead of flattening it into
+  // the generic "no supported configs" below.
   const parsed = parseConfigText(text);
   if (!parsed.length) throw new Error('No supported configs found in that file');
 

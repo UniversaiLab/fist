@@ -34,6 +34,13 @@ marketplace prototype.
   see per-subscription data-usage/expiry.
 - **`.fist` bundles** — a compact, dependency-free export/import format for
   moving many configs at once (see `packages/core-logic/fistFormat.js`).
+- **NapsternetV imports** — plain-text `.npvt`/`.npv4`/`.inpv` exports are
+  read directly (single config, array, or wrapped under a
+  `configs`/`profiles` key, as well as plain link lists). NapsternetV's
+  *encrypted* container (files beginning with an `NPVT1` magic line) is
+  detected and reported as such: its key lives inside the NapsternetV app,
+  so it cannot be decrypted here — re-export the server as an `npvt-ssh://`
+  link instead.
 - **Server Finder** — batch ping/real-connect/speed tests across your
   configs with a live dashboard, to find the fastest one.
 - **Config marketplace** — buy/sell configs, with a backend
@@ -59,7 +66,7 @@ marketplace prototype.
 | Shadowsocks | native sing-box outbound |
 | Hysteria2 (`hysteria2://`, `hy2://`) | native sing-box outbound |
 | WireGuard (`.conf` import) | native sing-box endpoint |
-| SSH (`npvt-ssh://` links, pasted SSH JSON, or an `ssh -J`/`sshuttle` jump-chain command) | native sing-box `ssh` outbound, chained through jump/bastion hosts via `detour` when present |
+| SSH (`npvt-ssh://` links, pasted SSH JSON, plain-text NapsternetV `.npvt`/`.npv4`/`.inpv` exports, or an `ssh -J`/`sshuttle` jump-chain command) | native sing-box `ssh` outbound, chained through jump/bastion hosts via `detour` when present |
 | MTProto (`tg://proxy`, `mtproto://`) | parsed/stored/QR-exportable only — Telegram proxies aren't a system tunnel, so these open directly in Telegram instead of connecting through FIST |
 | Anything else sing-box supports natively (SOCKS, TUIC, Naive, ShadowTLS, AnyTLS, …) | paste sing-box's own outbound JSON as a **raw outbound** |
 | Truly unknown formats | an installed **extension** you choose per-config |

@@ -295,6 +295,70 @@ function parseSshJson(text) {
   return sshProfileFromObject(obj, `npvt-ssh-json:${text.slice(0, 40)}`);
 }
 
+// ---- NapsternetV .npvt / .npv4 / .inpv config files ----
+//
+// Two shapes exist in the wild under these extensions:
+//
+//   1. A plain-text export -- either NapsternetV's own JSON (the same
+//      sshHost/sshUsername shape as npvt-ssh:// links, sometimes wrapped in
+//      an array or under a `configs`/`profiles` key), or just a list of
+//      share links. Those we can read directly.
+//
+//   2. An encrypted container, recognisable by an "NPVT1" magic line
+//      followed by comma-separated base64 blobs. The key for these lives
+//      inside the NapsternetV app itself, so we cannot decrypt them and must
+//      say so plainly instead of failing with a generic "unsupported format".
+//
+// Analysis of a real encrypted sample: body is `<17-byte blob>,<payload>,
+// <trailer>`, none of the segments block-aligned, no repeated ECB blocks, and
+// no repeating-XOR key recoverable by frequency analysis or known-plaintext
+// cribs -- i.e. genuinely encrypted, not merely obfuscated.
+const NPVT_ENCRYPTED_MAGIC = /^NPVT\d+\s*$/;
+
+function isEncryptedNapsternetFile(text) {
+  const firstLine = String(text || '').split(/\r?\n/, 1)[0].trim();
+  return NPVT_ENCRYPTED_MAGIC.test(firstLine);
+}
+
+// Pull every SSH-shaped object out of whatever container the JSON uses.
+function napsternetProfilesFromJson(data, link) {
+  const out = [];
+  const visit = (node) => {
+    if (!node || typeof node !== 'object') return;
+    if (Array.isArray(node)) { node.forEach(visit); return; }
+    const p = sshProfileFromObject(node, link);
+    if (p) { out.push(p); return; }
+    // Not an SSH config itself -- recurse into the usual wrapper keys.
+    for (const key of ['configs', 'profiles', 'servers', 'data', 'items', 'list']) {
+      if (node[key]) visit(node[key]);
+    }
+  };
+  visit(data);
+  return out;
+}
+
+function parseNapsternetFile(text) {
+  const raw = String(text || '').trim();
+  if (!raw) return [];
+
+  if (isEncryptedNapsternetFile(raw)) {
+    throw new Error(
+      'This is an encrypted NapsternetV file. Its contents are locked with a key '
+      + 'held inside the NapsternetV app, so FIST cannot read it. Open it in '
+      + 'NapsternetV and export or share the server as an npvt-ssh:// link, then add that here.'
+    );
+  }
+
+  try {
+    const found = napsternetProfilesFromJson(JSON.parse(raw), `npvt-file:${raw.slice(0, 32)}`);
+    if (found.length) return found;
+  } catch {
+    // Not JSON -- fall through to treating it as a list of links.
+  }
+
+  return parseMany(raw);
+}
+
 // Pasted `ssh -J ...` / `sshuttle ... --ssh-cmd 'ssh -J ...'` command lines --
 // the exact commands a user would run by hand or with sshuttle to chain
 // through one or more jump/bastion hosts before reaching the real target.
@@ -510,9 +574,21 @@ function parseConfigText(text) {
     const p = parseWireguardConf(trimmed);
     return p ? [p] : [];
   }
+  // Encrypted NapsternetV containers are detected here (rather than only on
+  // file import) so pasting one in also gets the real explanation instead of
+  // silently yielding nothing.
+  if (isEncryptedNapsternetFile(trimmed)) {
+    return parseNapsternetFile(trimmed);
+  }
   if (trimmed.startsWith('{')) {
     const p = parseSshJson(trimmed);
-    return p ? [p] : [];
+    if (p) return [p];
+    // Could still be a NapsternetV export that wraps its servers in an
+    // array or a `configs`/`profiles` key rather than being one directly.
+    return parseNapsternetFile(trimmed);
+  }
+  if (trimmed.startsWith('[')) {
+    return parseNapsternetFile(trimmed);
   }
   if (/^(ssh|sshuttle)\b/.test(trimmed)) {
     const p = parseSshJumpCommand(trimmed);
@@ -814,6 +890,7 @@ function buildCustomProfile(fields) {
 
 module.exports = {
   parseLink, parseMany, parseConfigText, parseWireguardConf, parseRawOutbound, parseSshJumpCommand, newId, parseSubscriptionUserinfo,
+  parseNapsternetFile, isEncryptedNapsternetFile,
   buildLink, buildCustomProfile,
   encodeFistBundle: (profiles) => encodeFistBundle(profiles, baseProfile),
 };
