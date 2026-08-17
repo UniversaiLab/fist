@@ -68,7 +68,9 @@ marketplace prototype.
 | WireGuard (`.conf` import) | native sing-box endpoint |
 | SSH (`npvt-ssh://` links, pasted SSH JSON, plain-text NapsternetV `.npvt`/`.npv4`/`.inpv` exports, or an `ssh -J`/`sshuttle` jump-chain command) | native sing-box `ssh` outbound, chained through jump/bastion hosts via `detour` when present |
 | MTProto (`tg://proxy`, `mtproto://`) | parsed/stored/QR-exportable only — Telegram proxies aren't a system tunnel, so these open directly in Telegram instead of connecting through FIST |
-| Anything else sing-box supports natively (SOCKS, TUIC, Naive, ShadowTLS, AnyTLS, …) | paste sing-box's own outbound JSON as a **raw outbound** |
+| SOCKS5 / HTTP upstream proxies (incl. username/password) | native sing-box `socks` / `http` outbound |
+| Full **Xray / V2Ray JSON configs** (`{"outbounds":[…]}` — v2rayNG exports, panel output, decrypted NapsternetV configs) | the `proxy` outbound is extracted and mapped onto the matching native outbound; the file's own inbounds/DNS/routing are ignored in favour of the app's settings |
+| Anything else sing-box supports natively (TUIC, Naive, ShadowTLS, AnyTLS, …) | paste sing-box's own outbound JSON as a **raw outbound** |
 | Truly unknown formats | an installed **extension** you choose per-config |
 
 ## Engines / extensions

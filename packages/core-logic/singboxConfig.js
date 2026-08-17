@@ -142,6 +142,23 @@ function buildOutbound(p) {
         user: p.username,
         ...sshAuthFields(p),
       };
+    case 'socks':
+    case 'http':
+      // Upstream SOCKS5/HTTP proxies. sing-box has native outbounds for both,
+      // so a config whose "server" is just another proxy (common in Xray
+      // configs exported by panels) tunnels through the same engine as
+      // everything else. Credentials are optional -- many are open relays.
+      return {
+        type: p.protocol,
+        tag: 'proxy',
+        server: p.address,
+        server_port: p.port,
+        ...(p.username ? { username: p.username } : {}),
+        ...(p.password ? { password: p.password } : {}),
+        ...(p.protocol === 'http' && p.security === 'tls'
+          ? { tls: tlsSettings(p) || { enabled: true, server_name: p.sni || p.address } }
+          : {}),
+      };
     case 'hysteria2': {
       const out = {
         type: 'hysteria2',
