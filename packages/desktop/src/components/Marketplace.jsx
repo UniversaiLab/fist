@@ -1,9 +1,31 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import Icon from './Icon.jsx';
+import StarRating from './StarRating.jsx';
 import { MOCK_LISTINGS, MOCK_MY_LISTINGS, PROTOCOL_LABELS } from '../marketplace/mockListings.js';
 
 const OWNED_KEY = 'fist.marketplace.owned';
 const MY_LISTINGS_KEY = 'fist.marketplace.myListings';
+const RATINGS_KEY = 'fist.marketplace.myRatings';
+
+// Ratings the user has given, keyed by listing id. Persisted locally so the
+// UI can show "your rating" on return; the authoritative aggregate lives on
+// the marketplace server (POST /api/ratings) once this tab is wired to it.
+function loadMyRatings() {
+  try {
+    const raw = localStorage.getItem(RATINGS_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveMyRatings(map) {
+  try {
+    localStorage.setItem(RATINGS_KEY, JSON.stringify(map));
+  } catch {
+    // storage unavailable -- the rating just won't persist across restarts
+  }
+}
 
 function loadOwned() {
   try {
@@ -50,7 +72,7 @@ function Stars({ rating }) {
   );
 }
 
-function ListingCard({ listing, owned, buying, onBuy }) {
+function ListingCard({ listing, owned, buying, onBuy, myRating, onRate }) {
   return (
     <div className="mkt-card">
       <div className="mkt-card-top">
@@ -80,6 +102,23 @@ function ListingCard({ listing, owned, buying, onBuy }) {
           <>Buy for ${listing.price.toFixed(2)}</>
         )}
       </button>
+
+      {/* Rating is gated on ownership -- you can only score a provider whose
+          config you actually bought, which is the same rule the server
+          enforces on POST /api/ratings. */}
+      {owned && (
+        <div className="mkt-rate-row">
+          <span className="mkt-rate-label">
+            {myRating ? 'Your rating' : 'Rate this provider'}
+          </span>
+          <StarRating
+            value={myRating || 0}
+            readOnly={false}
+            size={13}
+            onRate={(stars) => onRate(listing, stars)}
+          />
+        </div>
+      )}
     </div>
   );
 }
@@ -146,6 +185,16 @@ export default function Marketplace({ onBuy, onToast }) {
   const [buyingId, setBuyingId] = useState(null);
   const [myListings, setMyListings] = useState(() => [...MOCK_MY_LISTINGS, ...loadMyListings()]);
   const [showPublish, setShowPublish] = useState(false);
+  const [myRatings, setMyRatings] = useState(loadMyRatings);
+
+  const handleRate = useCallback((listing, stars) => {
+    setMyRatings((prev) => {
+      const next = { ...prev, [listing.id]: stars };
+      saveMyRatings(next);
+      return next;
+    });
+    onToast?.(`Rated ${listing.title} ${stars}/5`);
+  }, [onToast]);
 
   const handleBuy = useCallback(async (listing) => {
     if (owned.has(listing.id) || buyingId) return;
@@ -223,6 +272,8 @@ export default function Marketplace({ onBuy, onToast }) {
               owned={owned.has(listing.id)}
               buying={buyingId === listing.id}
               onBuy={handleBuy}
+              myRating={myRatings[listing.id]}
+              onRate={handleRate}
             />
           ))}
         </div>

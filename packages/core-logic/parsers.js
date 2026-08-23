@@ -295,6 +295,189 @@ function parseSshJson(text) {
   return sshProfileFromObject(obj, `npvt-ssh-json:${text.slice(0, 40)}`);
 }
 
+// ---- Full Xray / V2Ray JSON configs ----
+//
+// The complete client config (log/inbounds/outbounds/dns/routing), as
+// produced by v2rayNG, NapsternetV's decrypted export, and most panel
+// generators. We only care about the *proxy* outbound: our own engine builds
+// the inbounds, DNS, and routing itself, so importing those would just fight
+// with the app's own settings.
+//
+// Xray nests connection details differently per protocol -- vmess/vless under
+// `settings.vnext[].users[]`, trojan/shadowsocks/socks/http under
+// `settings.servers[]` -- and transport/TLS under `streamSettings`.
+
+function xrayStream(p, stream) {
+  const s = stream || {};
+  p.network = s.network || 'tcp';
+  const sec = (s.security || 'none').toLowerCase();
+  p.security = sec === 'xtls' ? 'tls' : sec; // sing-box has no separate xtls transport
+  const tls = s.tlsSettings || s.realitySettings || {};
+  p.sni = tls.serverName || '';
+  p.allowInsecure = !!tls.allowInsecure;
+  p.fingerprint = tls.fingerprint || '';
+  if (Array.isArray(tls.alpn)) p.alpn = tls.alpn.join(',');
+  if (s.realitySettings) {
+    p.security = 'reality';
+    p.publicKey = tls.publicKey || '';
+    p.shortId = tls.shortId || '';
+    p.spiderX = tls.spiderX || '';
+  }
+  const ws = s.wsSettings || {};
+  const http = s.httpSettings || {};
+  const grpc = s.grpcSettings || {};
+  const tcp = s.tcpSettings || {};
+  if (ws.path) p.path = ws.path;
+  if (ws.headers && ws.headers.Host) p.host = ws.headers.Host;
+  if (http.path) p.path = http.path;
+  if (Array.isArray(http.host) && http.host.length) p.host = http.host[0];
+  if (grpc.serviceName) p.serviceName = grpc.serviceName;
+  const hdr = tcp.header || {};
+  if (hdr.type) p.headerType = hdr.type;
+}
+
+function profileFromXrayOutbound(out, remarks, link) {
+  const proto = String(out.protocol || '').toLowerCase();
+  const st = out.settings || {};
+  const vnext = Array.isArray(st.vnext) ? st.vnext[0] : null;
+  const server = Array.isArray(st.servers) ? st.servers[0] : null;
+
+  let p = null;
+  if ((proto === 'vmess' || proto === 'vless') && vnext) {
+    const user = (vnext.users || [])[0] || {};
+    p = baseProfile(proto, link);
+    p.address = String(vnext.address || '');
+    p.port = Number(vnext.port) || 443;
+    p.uuid = String(user.id || '');
+    if (proto === 'vmess') {
+      p.alterId = Number(user.alterId) || 0;
+      p.scy = user.security || 'auto';
+    } else {
+      p.flow = user.flow || '';
+      p.encryption = user.encryption || 'none';
+    }
+  } else if (proto === 'trojan' && server) {
+    p = baseProfile('trojan', link);
+    p.address = String(server.address || '');
+    p.port = Number(server.port) || 443;
+    p.password = String(server.password || '');
+    p.security = 'tls';
+  } else if (proto === 'shadowsocks' && server) {
+    p = baseProfile('shadowsocks', link);
+    p.address = String(server.address || '');
+    p.port = Number(server.port) || 443;
+    p.method = String(server.method || '');
+    p.password = String(server.password || '');
+  } else if ((proto === 'socks' || proto === 'http') && server) {
+    // sing-box has native socks/http outbounds, so these tunnel for real
+    // rather than needing the raw-JSON escape hatch.
+    const user = (server.users || [])[0] || {};
+    p = baseProfile(proto, link);
+    p.address = String(server.address || '');
+    p.port = Number(server.port) || 1080;
+    p.username = String(user.user || user.username || '');
+    p.password = String(user.pass || user.password || '');
+  } else {
+    return null;
+  }
+
+  if (!p.address) return null;
+  xrayStream(p, out.streamSettings);
+  p.name = remarks || `${p.address}:${p.port}`;
+  return p;
+}
+
+// Xray calls the tunnel outbound "proxy" by convention; freedom/blackhole are
+// its direct/block handlers and must never be imported as servers.
+const XRAY_NON_PROXY = new Set(['freedom', 'blackhole', 'dns']);
+
+function parseXrayConfig(text) {
+  let cfg;
+  try {
+    cfg = JSON.parse(text);
+  } catch {
+    return [];
+  }
+  if (!cfg || !Array.isArray(cfg.outbounds)) return [];
+
+  const remarks = cfg.remarks || cfg.ps || '';
+  const candidates = cfg.outbounds.filter((o) => o && !XRAY_NON_PROXY.has(String(o.protocol || '').toLowerCase()));
+  // Prefer the conventionally-tagged one, else take whatever real proxy exists.
+  const ordered = [
+    ...candidates.filter((o) => o.tag === 'proxy'),
+    ...candidates.filter((o) => o.tag !== 'proxy'),
+  ];
+  for (const out of ordered) {
+    const p = profileFromXrayOutbound(out, remarks, `xray-json:${remarks || 'config'}`);
+    if (p) return [p];
+  }
+  return [];
+}
+
+// ---- NapsternetV .npvt / .npv4 / .inpv config files ----
+//
+// Two shapes exist in the wild under these extensions:
+//
+//   1. A plain-text export -- either NapsternetV's own JSON (the same
+//      sshHost/sshUsername shape as npvt-ssh:// links, sometimes wrapped in
+//      an array or under a `configs`/`profiles` key), or just a list of
+//      share links. Those we can read directly.
+//
+//   2. An encrypted container, recognisable by an "NPVT1" magic line
+//      followed by comma-separated base64 blobs. The key for these lives
+//      inside the NapsternetV app itself, so we cannot decrypt them and must
+//      say so plainly instead of failing with a generic "unsupported format".
+//
+// Analysis of a real encrypted sample: body is `<17-byte blob>,<payload>,
+// <trailer>`, none of the segments block-aligned, no repeated ECB blocks, and
+// no repeating-XOR key recoverable by frequency analysis or known-plaintext
+// cribs -- i.e. genuinely encrypted, not merely obfuscated.
+const NPVT_ENCRYPTED_MAGIC = /^NPVT\d+\s*$/;
+
+function isEncryptedNapsternetFile(text) {
+  const firstLine = String(text || '').split(/\r?\n/, 1)[0].trim();
+  return NPVT_ENCRYPTED_MAGIC.test(firstLine);
+}
+
+// Pull every SSH-shaped object out of whatever container the JSON uses.
+function napsternetProfilesFromJson(data, link) {
+  const out = [];
+  const visit = (node) => {
+    if (!node || typeof node !== 'object') return;
+    if (Array.isArray(node)) { node.forEach(visit); return; }
+    const p = sshProfileFromObject(node, link);
+    if (p) { out.push(p); return; }
+    // Not an SSH config itself -- recurse into the usual wrapper keys.
+    for (const key of ['configs', 'profiles', 'servers', 'data', 'items', 'list']) {
+      if (node[key]) visit(node[key]);
+    }
+  };
+  visit(data);
+  return out;
+}
+
+function parseNapsternetFile(text) {
+  const raw = String(text || '').trim();
+  if (!raw) return [];
+
+  if (isEncryptedNapsternetFile(raw)) {
+    throw new Error(
+      'This is an encrypted NapsternetV file. Its contents are locked with a key '
+      + 'held inside the NapsternetV app, so FIST cannot read it. Open it in '
+      + 'NapsternetV and export or share the server as an npvt-ssh:// link, then add that here.'
+    );
+  }
+
+  try {
+    const found = napsternetProfilesFromJson(JSON.parse(raw), `npvt-file:${raw.slice(0, 32)}`);
+    if (found.length) return found;
+  } catch {
+    // Not JSON -- fall through to treating it as a list of links.
+  }
+
+  return parseMany(raw);
+}
+
 // Pasted `ssh -J ...` / `sshuttle ... --ssh-cmd 'ssh -J ...'` command lines --
 // the exact commands a user would run by hand or with sshuttle to chain
 // through one or more jump/bastion hosts before reaching the real target.
@@ -510,9 +693,26 @@ function parseConfigText(text) {
     const p = parseWireguardConf(trimmed);
     return p ? [p] : [];
   }
+  // Encrypted NapsternetV containers are detected here (rather than only on
+  // file import) so pasting one in also gets the real explanation instead of
+  // silently yielding nothing.
+  if (isEncryptedNapsternetFile(trimmed)) {
+    return parseNapsternetFile(trimmed);
+  }
   if (trimmed.startsWith('{')) {
+    // A full Xray/V2Ray client config (what a decrypted NapsternetV export
+    // and most panel generators produce) -- checked before the SSH-JSON and
+    // NapsternetV shapes since it's the most specific match.
+    const xray = parseXrayConfig(trimmed);
+    if (xray.length) return xray;
     const p = parseSshJson(trimmed);
-    return p ? [p] : [];
+    if (p) return [p];
+    // Could still be a NapsternetV export that wraps its servers in an
+    // array or a `configs`/`profiles` key rather than being one directly.
+    return parseNapsternetFile(trimmed);
+  }
+  if (trimmed.startsWith('[')) {
+    return parseNapsternetFile(trimmed);
   }
   if (/^(ssh|sshuttle)\b/.test(trimmed)) {
     const p = parseSshJumpCommand(trimmed);
@@ -814,6 +1014,7 @@ function buildCustomProfile(fields) {
 
 module.exports = {
   parseLink, parseMany, parseConfigText, parseWireguardConf, parseRawOutbound, parseSshJumpCommand, newId, parseSubscriptionUserinfo,
+  parseNapsternetFile, isEncryptedNapsternetFile, parseXrayConfig,
   buildLink, buildCustomProfile,
   encodeFistBundle: (profiles) => encodeFistBundle(profiles, baseProfile),
 };

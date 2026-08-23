@@ -139,11 +139,134 @@ async function creatorStats(creatorId) {
   return { sales: Number(sales || 0), earningsCents: Number(earningsCents || 0) };
 }
 
+// -------- Ratings --------
+// rating:{listingId}:{userId}   HASH  { stars, comment, createdAt }
+// ratings:listing:{listingId}   ZSET  createdAtMs -> userId   (listing's reviews)
+// rating:sum:{listingId}        STRING (counter) -- sum of stars, for a mean
+// rating:count:{listingId}      STRING (counter) -- number of ratings
+// rating:sum|count:creator:{id} STRING (counter) -- same, aggregated per creator
+//
+// One rating per (listing, user): re-rating overwrites in place and adjusts
+// the running sums by the delta, so the aggregate never double-counts.
+
+async function getRating(listingId, userId) {
+  const row = await redis.hgetall(`rating:${listingId}:${userId}`);
+  if (!row || !row.stars) return null;
+  return { listingId: String(listingId), userId: String(userId), ...row, stars: Number(row.stars) };
+}
+
+async function upsertRating({ listingId, creatorId, userId, stars, comment }) {
+  const existing = await getRating(listingId, userId);
+  const createdAtMs = Date.now();
+
+  await redis.hmset(`rating:${listingId}:${userId}`, [
+    'stars', String(stars),
+    'comment', comment || '',
+    'createdAt', new Date(createdAtMs).toISOString(),
+  ]);
+  await redis.zadd(`ratings:listing:${listingId}`, String(createdAtMs), String(userId));
+
+  // Apply only the difference when replacing an existing rating, so counts
+  // stay accurate and the mean doesn't drift on every edit.
+  const delta = stars - (existing ? existing.stars : 0);
+  await redis.incrby(`rating:sum:${listingId}`, delta);
+  await redis.incrby(`rating:sum:creator:${creatorId}`, delta);
+  if (!existing) {
+    await redis.incr(`rating:count:${listingId}`);
+    await redis.incr(`rating:count:creator:${creatorId}`);
+  }
+  return getRating(listingId, userId);
+}
+
+async function ratingStats(listingId) {
+  const [sum, count] = await Promise.all([
+    redis.get(`rating:sum:${listingId}`),
+    redis.get(`rating:count:${listingId}`),
+  ]);
+  const n = Number(count || 0);
+  return { count: n, average: n ? Number(sum || 0) / n : 0 };
+}
+
+async function creatorRatingStats(creatorId) {
+  const [sum, count] = await Promise.all([
+    redis.get(`rating:sum:creator:${creatorId}`),
+    redis.get(`rating:count:creator:${creatorId}`),
+  ]);
+  const n = Number(count || 0);
+  return { count: n, average: n ? Number(sum || 0) / n : 0 };
+}
+
+async function listRatings(listingId, limit = 20) {
+  const userIds = await redis.zrevrange(`ratings:listing:${listingId}`, '0', String(limit - 1));
+  const rows = await Promise.all(userIds.map(async (uid) => {
+    const [rating, user] = await Promise.all([getRating(listingId, uid), getUserById(uid)]);
+    return rating ? { ...rating, displayName: user ? user.displayName : 'Unknown' } : null;
+  }));
+  return rows.filter(Boolean);
+}
+
+// -------- Crypto invoices --------
+// invoice:{id}            HASH   full invoice record
+// invoices:by_buyer:{id}  ZSET   createdAtMs -> invoiceId
+// seq:invoice_index       STRING monotonic HD derivation index
+
+async function nextInvoiceIndex() {
+  return redis.incr('seq:invoice_index');
+}
+
+async function createInvoice(data) {
+  const id = String(await nextId('seq:invoice'));
+  const createdAtMs = Date.now();
+  const record = { ...data, id, createdAt: new Date(createdAtMs).toISOString() };
+  await redis.hmset(`invoice:${id}`, Object.entries(record).flatMap(([k, v]) => [k, String(v)]));
+  await redis.zadd(`invoices:by_buyer:${data.buyerId}`, String(createdAtMs), id);
+  return getInvoiceById(id);
+}
+
+async function getInvoiceById(id) {
+  const row = await redis.hgetall(`invoice:${id}`);
+  if (!row || !row.address) return null;
+  return {
+    ...row,
+    id: String(id),
+    amountCents: Number(row.amountCents),
+    derivationIndex: Number(row.derivationIndex),
+    confirmationsRequired: Number(row.confirmationsRequired),
+    expiresAt: Number(row.expiresAt),
+  };
+}
+
+async function updateInvoice(id, patch) {
+  await redis.hmset(`invoice:${id}`, Object.entries(patch).flatMap(([k, v]) => [k, String(v)]));
+  return getInvoiceById(id);
+}
+
+async function markInvoicePaid(id, patch) {
+  return updateInvoice(id, { ...patch, status: 'paid' });
+}
+
+async function listInvoicesByBuyer(buyerId) {
+  const ids = await redis.zrevrange(`invoices:by_buyer:${buyerId}`, '0', '-1');
+  const rows = await Promise.all(ids.map(getInvoiceById));
+  return rows.filter(Boolean);
+}
+
 export {
   redis,
   createUser,
   getUserByEmail,
   getUserById,
+  getRating,
+  upsertRating,
+  ratingStats,
+  creatorRatingStats,
+  listRatings,
+  nextInvoiceIndex,
+  createInvoice,
+  getInvoiceById,
+  updateInvoice,
+  markInvoicePaid,
+  listInvoicesByBuyer,
   createListing,
   getListingById,
   listLiveListings,

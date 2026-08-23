@@ -1,10 +1,13 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import ServerList from './components/ServerList.jsx';
 import AddModal from './components/AddModal.jsx';
-import ConnectHero from './components/ConnectHero.jsx';
+import CompactConnect from './components/CompactConnect.jsx';
+import LocationsPanel from './components/LocationsPanel.jsx';
+import SettingsDrawer from './components/SettingsDrawer.jsx';
 import StatusBar from './components/StatusBar.jsx';
 import SettingsView from './components/SettingsView.jsx';
 import Marketplace from './components/Marketplace.jsx';
+import Wallet from './components/Wallet.jsx';
 import Engines from './components/Engines.jsx';
 import ServerFinder from './components/ServerFinder.jsx';
 import Icon from './components/Icon.jsx';
@@ -12,13 +15,24 @@ import { loadSession, saveSession, clearSession } from './utils/sessionState.js'
 
 const PING_CONCURRENCY = 12;
 
+const DRAWER_TITLES = {
+  settings: 'Settings',
+  network: 'Network',
+  marketplace: 'Marketplace',
+  wallet: 'Wallet',
+  engines: 'Engines',
+};
+
 // Custom chrome for the frameless window. Standard Windows layout: app
 // icon/name at the top-left, minimize/maximize/close at the top-right in
 // that order (close outermost) -- `.titlebar` forces `direction: ltr` in CSS
 // so this physical layout holds regardless of the app's own RTL content.
-function TitleBar({ maximized, onMinimize, onToggleMaximize, onClose }) {
+function TitleBar({ maximized, onMinimize, onToggleMaximize, onClose, onOpenMenu }) {
   return (
     <div className="titlebar">
+      <button className="tb-menu" onClick={onOpenMenu} title="Menu" aria-label="Open menu">
+        <Icon name="sliders" size={14} />
+      </button>
       <div className="titlebar-brand">
         <img src="./logo.png" alt="" />
         <span>FIST</span>
@@ -72,7 +86,10 @@ export default function App() {
   // restore before that check resolves is a harmless, self-correcting edge
   // case, not worth delaying the sidebar's first render to avoid.
   const sessionRef = useRef(loadSession() || {});
-  const [tab, setTab] = useState(() => sessionRef.current.tab || 'servers');
+  // `drawer` holds which secondary pane is showing over the compact window
+  // (null = just the connect panel). Replaces the old full-width `tab`.
+  const [drawer, setDrawer] = useState(null);
+  const [locationsOpen, setLocationsOpen] = useState(false);
   const [toast, setToast] = useState(null);
   const [busy, setBusy] = useState(false);
   const [updatingSubs, setUpdatingSubs] = useState(false);
@@ -113,12 +130,18 @@ export default function App() {
     setKillSwitchBlocking(!!data.killSwitchBlocking);
   }, []);
 
-  // Ctrl+K (or Ctrl+F) opens the server finder from anywhere.
+  // Ctrl+K (or Ctrl+F) opens the server finder from anywhere; Esc backs out
+  // of whichever overlay is on top of the compact window.
   useEffect(() => {
     const onKey = (e) => {
       if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'f')) {
         e.preventDefault();
         setFinderOpen((v) => !v);
+      }
+      if (e.key === 'Escape') {
+        // Modals own their own Escape handling; only act when none is open.
+        if (document.body.dataset.modalOpen === 'true') return;
+        setDrawer((d) => (d ? null : d));
       }
     };
     window.addEventListener('keydown', onKey);
@@ -183,29 +206,23 @@ export default function App() {
     const offLatency = window.soul.onLatencyUpdate(({ ms }) => setLatencyMs(ms));
     const offTraffic = window.soul.onTrafficUpdate((data) => setTraffic(data));
     const offProfiles = window.soul.onProfilesChanged(() => refresh());
-    const offOpenSettings = window.soul.onOpenSettings(() => setTab('settings'));
+    const offOpenSettings = window.soul.onOpenSettings(() => setDrawer('settings'));
     const offUpdater = window.soul.onUpdaterStatus(setUpdaterStatus);
     return () => { offState(); offLatency(); offTraffic(); offProfiles(); offOpenSettings(); offUpdater(); };
   }, [refresh]);
 
-  // "Restore Previous Session": persist the active tab whenever it changes,
-  // but only while the setting is on -- and wipe any stored session the
-  // moment it's turned off, so a disabled toggle actually stays disabled.
+  // "Restore Previous Session": wipe any stored session the moment the
+  // setting is turned off, so a disabled toggle actually stays disabled.
   useEffect(() => {
     if (!settings) return;
-    if (!settings.restorePreviousSession) {
-      clearSession();
-      return;
-    }
-    saveSession({ ...sessionRef.current, tab });
-  }, [tab, settings]);
+    if (!settings.restorePreviousSession) clearSession();
+  }, [settings]);
 
-  // Debounced report from ServerList of query/sortBy/collapsed -- merged
-  // into the same stored session object as `tab`.
+  // Debounced report from ServerList of the list's query/sortBy/collapsed.
   const handleSessionChange = useCallback((partial) => {
     sessionRef.current = { ...sessionRef.current, ...partial };
-    if (settings?.restorePreviousSession) saveSession({ ...sessionRef.current, tab });
-  }, [tab, settings]);
+    if (settings?.restorePreviousSession) saveSession(sessionRef.current);
+  }, [settings]);
 
   // Stabilized with useCallback: these flow into React.memo'd children
   // (ServerCard via ServerList, ConnectHero, StatusBar) that sit in the
@@ -551,19 +568,27 @@ export default function App() {
         onMinimize={() => window.soul.windowMinimize()}
         onToggleMaximize={() => window.soul.windowToggleMaximize()}
         onClose={() => window.soul.windowClose()}
+        onOpenMenu={() => setDrawer('settings')}
       />
-      <div className="workspace">
-        <aside className="sidebar">
-          <header className="sidebar-head">
-            <img className="mark" src="./logo.png" alt="" />
-            <div className="brand">
-              <span className="brand-name">FIST</span>
-              <span className="brand-sub">
-                {profiles.length ? `${profiles.length} configs` : 'sing-box client'}
-              </span>
-            </div>
-          </header>
+      <div className="workspace compact">
+        <CompactConnect
+          connectionState={connectionState}
+          connectionMode={connectionMode}
+          activeProfile={activeProfile}
+          settings={settings}
+          systemProxyEnabled={systemProxyEnabled}
+          onToggle={handleToggleConnect}
+          onSetMode={handleSetMode}
+          onOpenLocations={() => setLocationsOpen(true)}
+        />
 
+        <LocationsPanel
+          open={locationsOpen}
+          onToggle={() => setLocationsOpen((v) => !v)}
+          count={profiles.length}
+          onAdd={() => setShowAdd(true)}
+          onOpenFinder={() => setFinderOpen(true)}
+        >
           <ServerList
             profiles={profiles}
             subscriptions={subscriptions}
@@ -594,121 +619,71 @@ export default function App() {
             initialCollapsed={sessionRef.current.collapsed}
             onSessionChange={handleSessionChange}
           />
+        </LocationsPanel>
 
-          {profiles.length > 0 && (
-            <footer className="sidebar-foot">
-              <button className="btn primary add-btn" onClick={() => setShowAdd(true)}>
-                <Icon name="plus" size={15} />
-                Add Config
-              </button>
-              <button
-                className="icon-btn tall"
-                onClick={() => setFinderOpen(true)}
-                title="Smart Server Finder (Ctrl+K)"
-              >
-                <Icon name="radar" size={15} />
-              </button>
-            </footer>
-          )}
-        </aside>
-
-        <main className="main">
-          <header className="main-head">
-            <span className="main-title">
-              {tab === 'settings' ? 'Settings' : tab === 'marketplace' ? 'Marketplace' : tab === 'engines' ? 'Engines' : 'Connection Control'}
+        {killSwitchBlocking && (
+          <div className="killswitch-banner" role="alert">
+            <Icon name="shield" size={14} />
+            <span className="killswitch-banner-text">
+              Kill Switch active — traffic blocked.
             </span>
-            <div className="main-head-actions">
-              <button
-                className="icon-btn ghost"
-                onClick={() => setTab(tab === 'engines' ? 'servers' : 'engines')}
-                title={tab === 'engines' ? 'Back to Connection Control' : 'Engines'}
-              >
-                <Icon name={tab === 'engines' ? 'close' : 'code'} size={16} />
-              </button>
-              <button
-                className="icon-btn ghost"
-                onClick={() => setTab(tab === 'marketplace' ? 'servers' : 'marketplace')}
-                title={tab === 'marketplace' ? 'Back to Connection Control' : 'Marketplace'}
-              >
-                <Icon name={tab === 'marketplace' ? 'close' : 'store'} size={16} />
-              </button>
-              <button
-                className="icon-btn ghost"
-                onClick={() => setTab(tab === 'settings' ? 'servers' : 'settings')}
-                title={tab === 'settings' ? 'Back to Connection Control' : 'Settings'}
-              >
-                <Icon name={tab === 'settings' ? 'close' : 'settings'} size={16} />
-              </button>
-            </div>
-          </header>
+            <button className="btn danger killswitch-banner-btn" onClick={handleEmergencyDisableKillSwitch}>
+              Disable
+            </button>
+          </div>
+        )}
 
-          {tab === 'servers' ? (
-            <ConnectHero
-              connectionState={connectionState}
-              connectionMode={connectionMode}
-              activeProfile={activeProfile}
-              onToggle={handleToggleConnect}
-              onSetMode={handleSetMode}
-            />
-          ) : tab === 'marketplace' ? (
-            <div className="settings-pane">
-              <Marketplace onBuy={handleMarketplacePurchase} onToast={showToast} />
-            </div>
-          ) : tab === 'engines' ? (
-            <div className="settings-pane">
-              <Engines onToast={showToast} onChanged={refreshExtensions} />
-            </div>
-          ) : (
-            <div className="settings-pane">
-              {settings && (
-                <SettingsView
-                  settings={settings}
-                  connectionState={connectionState}
-                  profiles={profiles}
-                  appInfo={appInfo}
-                  systemProxyEnabled={systemProxyEnabled}
-                  updaterStatus={updaterStatus}
-                  onCheckForUpdates={() => window.soul.checkForUpdates()}
-                  onDownloadUpdate={() => window.soul.downloadUpdate()}
-                  onInstallUpdate={() => window.soul.installUpdate()}
-                  onUpdate={handleUpdateSettings}
-                  onUpdateChecked={handleUpdateSettingsChecked}
-                  onOpenLogsFolder={() => window.soul.openLogsFolder()}
-                  onExportBackup={handleExportBackup}
-                  onExportFist={handleExportFist}
-                  onImportBackup={handleImportBackup}
-                  onResetUsage={handleResetUsage}
-                  onResetAllUsage={handleResetAllUsage}
-                  onSystemProxyEnable={handleSystemProxyEnable}
-                  onSystemProxyDisable={handleSystemProxyDisable}
-                  onOpenProxyFolder={handleOpenProxyFolder}
-                  onResetNetworkDefaults={handleResetNetworkDefaults}
-                  killSwitchBlocking={killSwitchBlocking}
-                />
-              )}
-            </div>
-          )}
-
-          {killSwitchBlocking && (
-            <div className="killswitch-banner" role="alert">
-              <Icon name="shield" size={16} />
-              <span className="killswitch-banner-text">
-                Kill Switch is active — all internet traffic is blocked until you reconnect.
-              </span>
-              <button className="btn danger killswitch-banner-btn" onClick={handleEmergencyDisableKillSwitch}>
-                Emergency Disable
-              </button>
-            </div>
-          )}
-
-          <StatusBar
-            connectionState={connectionState}
-            activeProfile={activeProfile}
-            traffic={traffic}
-            notice={toast}
-          />
-        </main>
+        <StatusBar
+          connectionState={connectionState}
+          activeProfile={activeProfile}
+          traffic={traffic}
+          notice={toast}
+        />
       </div>
+
+      {drawer && (
+        <SettingsDrawer
+          section={drawer}
+          onSection={setDrawer}
+          onClose={() => setDrawer(null)}
+          title={DRAWER_TITLES[drawer] || 'Settings'}
+        >
+          {drawer === 'marketplace' && (
+            <Marketplace onBuy={handleMarketplacePurchase} onToast={showToast} />
+          )}
+          {drawer === 'wallet' && <Wallet onToast={showToast} />}
+          {drawer === 'engines' && (
+            <Engines onToast={showToast} onChanged={refreshExtensions} />
+          )}
+          {(drawer === 'settings' || drawer === 'network') && settings && (
+            <SettingsView
+              settings={settings}
+              only={drawer === 'network' ? 'network' : 'general'}
+              connectionState={connectionState}
+              profiles={profiles}
+              appInfo={appInfo}
+              systemProxyEnabled={systemProxyEnabled}
+              updaterStatus={updaterStatus}
+              onCheckForUpdates={() => window.soul.checkForUpdates()}
+              onDownloadUpdate={() => window.soul.downloadUpdate()}
+              onInstallUpdate={() => window.soul.installUpdate()}
+              onUpdate={handleUpdateSettings}
+              onUpdateChecked={handleUpdateSettingsChecked}
+              onOpenLogsFolder={() => window.soul.openLogsFolder()}
+              onExportBackup={handleExportBackup}
+              onExportFist={handleExportFist}
+              onImportBackup={handleImportBackup}
+              onResetUsage={handleResetUsage}
+              onResetAllUsage={handleResetAllUsage}
+              onSystemProxyEnable={handleSystemProxyEnable}
+              onSystemProxyDisable={handleSystemProxyDisable}
+              onOpenProxyFolder={handleOpenProxyFolder}
+              onResetNetworkDefaults={handleResetNetworkDefaults}
+              killSwitchBlocking={killSwitchBlocking}
+            />
+          )}
+        </SettingsDrawer>
+      )}
 
       {finderOpen && (
         <ServerFinder

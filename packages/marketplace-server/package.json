@@ -10,6 +10,7 @@
     "dev": "bun --watch src/server.js"
   },
   "dependencies": {
+    "ethers": "^6.17.0",
     "hono": "^4.6.14"
   }
 }

@@ -3,7 +3,23 @@
 // something this small.
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'dev-insecure-secret-change-me';
+// A weak signing key means anyone can mint a token for any account, so the
+// insecure fallback is allowed only outside production. In production a
+// missing/short secret is a hard startup failure rather than a silent
+// downgrade nobody notices until tokens are being forged.
+const DEV_SECRET = 'dev-insecure-secret-change-me';
+const JWT_SECRET = (() => {
+  const configured = process.env.JWT_SECRET;
+  if (process.env.NODE_ENV === 'production') {
+    if (!configured || configured === DEV_SECRET) {
+      throw new Error('JWT_SECRET must be set to a strong unique value in production');
+    }
+    if (configured.length < 32) {
+      throw new Error('JWT_SECRET must be at least 32 characters in production');
+    }
+  }
+  return configured || DEV_SECRET;
+})();
 const TOKEN_TTL_SEC = 30 * 24 * 60 * 60; // 30 days
 
 function base64url(input) {

@@ -3400,3 +3400,467 @@ kbd {
     transform: none;
   }
 }
+
+/* ==========================================================================
+   COMPACT WINDOW SHELL
+   The app is a narrow utility panel (~380px), not a desktop-sized window.
+   The connect panel owns the top; locations slide up from the bottom; the
+   secondary surfaces (settings/marketplace/wallet/engines) come in as a
+   full-height drawer over everything. Same industrial vocabulary as the rest
+   of the app -- square corners, monospace caps, hairline rules.
+   ========================================================================== */
+
+.workspace.compact {
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+}
+
+/* Hamburger in the title bar that opens the drawer. */
+.tb-menu {
+  -webkit-app-region: no-drag;
+  width: 34px;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 0;
+  color: var(--text-faint);
+  cursor: pointer;
+}
+.tb-menu:hover { background: var(--card); color: var(--text); }
+
+/* ---------- Connect panel ---------- */
+.ck {
+  flex-shrink: 0;
+  padding: 16px 14px 12px;
+  /* Grows to fill whatever the collapsed locations panel doesn't use, which
+     keeps the status bar pinned to the window's bottom edge. Once the panel
+     is expanded it needs that space back, so the connect panel stops growing
+     and shrinks to its natural height instead. */
+  flex-grow: 1;
+  border-bottom: 1px solid var(--hairline);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 60%),
+    var(--bg-panel);
+  position: relative;
+  transition: background 220ms ease;
+}
+/* A single accent hairline across the top carries the connection state --
+   the cheapest possible "is it on?" signal at a glance. */
+.ck::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 2px;
+  background: var(--idle-dim);
+  transition: background 220ms ease;
+}
+.ck-on::before { background: var(--signal); }
+.ck-busy::before { background: var(--warn); }
+.ck-on { background: linear-gradient(180deg, var(--signal-tint), transparent 55%), var(--bg-panel); }
+
+.ck-statusline {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 56px;
+}
+
+.ck-state {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  padding: 3px 7px;
+  border: 1px solid var(--border);
+  color: var(--idle);
+}
+.ck-state-on { color: var(--signal); border-color: var(--signal-dim); background: var(--signal-tint); }
+.ck-state-busy { color: var(--warn); border-color: var(--warn); }
+
+.ck-chip {
+  font-family: inherit;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 3px 7px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  cursor: pointer;
+}
+.ck-chip:hover:not(:disabled) { background: var(--card-hover); color: var(--text); }
+.ck-chip:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.ck-port {
+  font-size: 11px;
+  color: var(--text-faint);
+  margin-inline-start: auto;
+  margin-inline-end: 4px;
+}
+
+/* The power button is the one deliberately round element in a square UI --
+   it should read instantly as the primary control. */
+.ck-power {
+  position: relative;
+  width: 52px;
+  height: 52px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--idle);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: color 200ms ease, border-color 200ms ease, background 200ms ease;
+}
+.ck-power:hover:not(:disabled) { background: var(--card-hover); color: var(--text); }
+.ck-power:disabled { opacity: 0.45; cursor: not-allowed; }
+.ck-power-on { color: var(--signal); border-color: var(--signal); background: var(--signal-tint); }
+.ck-power-busy { color: var(--warn); border-color: var(--warn); }
+
+.ck-power-ring {
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  border: 1px solid transparent;
+}
+.ck-power-on .ck-power-ring { border-color: var(--signal-dim); }
+/* Only the busy state animates, and only via transform/opacity so it stays
+   off the layout path. */
+.ck-power.busy .ck-power-ring {
+  border-color: var(--warn);
+  animation: ck-pulse 1.1s ease-in-out infinite;
+}
+@keyframes ck-pulse {
+  0%, 100% { transform: scale(1); opacity: 0.75; }
+  50% { transform: scale(1.09); opacity: 0.25; }
+}
+
+.ck-location {
+  display: block;
+  width: 100%;
+  text-align: start;
+  background: transparent;
+  border: 0;
+  padding: 10px 0 4px;
+  cursor: pointer;
+  color: inherit;
+}
+.ck-loc-name {
+  display: block;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 1.1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ck-loc-sub {
+  display: block;
+  font-size: 11px;
+  color: var(--text-faint);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-top: 2px;
+}
+.ck-location:hover .ck-loc-name { color: var(--signal); }
+.ck-loc-name.dim { color: var(--text-faint); }
+
+.ck-meta { margin-top: 12px; border-top: 1px solid var(--hairline); }
+.ck-meta-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 0;
+  font-size: 11px;
+  border-bottom: 1px solid var(--hairline);
+}
+.ck-meta-row:last-child { border-bottom: 0; }
+.ck-meta-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.ck-meta-val { color: var(--text-dim); }
+.ck-meta-val.on { color: var(--signal); }
+
+/* ---------- Locations panel ---------- */
+/* Collapsed it's just its own header height; expanded it takes the remaining
+   space and scrolls internally. Without the collapsed case being `flex: none`
+   the panel would claim the leftover height and leave a dead grey block under
+   the connect panel. */
+.lp {
+  flex: none;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-sidebar);
+}
+.lp.open { flex: 1; min-height: 0; }
+
+/* When the list is open it owns the free space, not the connect panel. */
+.workspace.compact:has(.lp.open) .ck { flex-grow: 0; }
+
+/* The list itself scrolls inside the panel rather than pushing the status
+   bar off the bottom of the window. */
+.lp-body .list { overflow-y: auto; min-height: 0; flex: 1; }
+.lp-head {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 8px 0 0;
+  border-bottom: 1px solid var(--hairline);
+}
+.lp-toggle {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 12px;
+  background: transparent;
+  border: 0;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-family: inherit;
+}
+.lp-toggle:hover { color: var(--text); }
+.lp-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+.lp-count {
+  font-size: 10px;
+  color: var(--text-faint);
+  padding: 1px 5px;
+  border: 1px solid var(--border);
+}
+.lp-chev { display: flex; transition: transform 180ms ease; }
+.lp-chev.up { transform: rotate(180deg); }
+.lp-head-actions { display: flex; gap: 2px; }
+
+.lp-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+/* ServerList is reused verbatim inside the panel; it just needs to scroll
+   within the panel's box rather than the old full-height sidebar. */
+.lp-body .list-wrap { flex: 1; min-height: 0; }
+
+/* ---------- Settings drawer ---------- */
+.dw {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  background: var(--bg);
+  animation: dw-in 160ms ease;
+}
+@keyframes dw-in {
+  from { opacity: 0; transform: translateX(10px); }
+  to { opacity: 1; transform: none; }
+}
+
+.dw-rail {
+  flex-shrink: 0;
+  width: 44px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 0;
+  background: var(--bg-sidebar);
+  border-inline-end: 1px solid var(--hairline);
+}
+.dw-rail-spacer { flex: 1; }
+.dw-rail-btn {
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+}
+.dw-rail-btn:hover { color: var(--text); background: var(--card); }
+.dw-rail-btn.active {
+  color: var(--signal);
+  border-color: var(--signal-dim);
+  background: var(--signal-tint);
+}
+.dw-rail-btn.close:hover { color: var(--danger); }
+
+.dw-pane { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.dw-head {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 10px 10px 14px;
+  border-bottom: 1px solid var(--hairline);
+}
+.dw-title {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+.dw-body { flex: 1; min-height: 0; overflow-y: auto; padding: 10px; }
+
+/* ---------- Ratings ---------- */
+.stars { display: inline-flex; align-items: center; gap: 1px; }
+.stars .star { color: var(--idle-dim); display: inline-flex; }
+.stars .star.on { color: var(--warn); }
+.stars.interactive .star {
+  background: transparent;
+  border: 0;
+  padding: 1px;
+  cursor: pointer;
+  color: var(--idle-dim);
+}
+.stars.interactive .star:hover { color: var(--warn); }
+.stars-meta { font-size: 10px; color: var(--text-faint); margin-inline-start: 5px; }
+
+.mkt-rate-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--hairline);
+}
+.mkt-rate-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-faint);
+}
+
+/* ---------- Wallet ---------- */
+.wl-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 28px 16px;
+  text-align: center;
+  color: var(--text-faint);
+}
+.wl-badge {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  padding: 2px 7px;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+}
+.wl-badge.on, .wl-badge.good { color: var(--signal); border-color: var(--signal-dim); background: var(--signal-tint); }
+.wl-badge.mid { color: var(--warn); border-color: var(--warn); }
+.wl-badge.bad { color: var(--danger); border-color: var(--danger); }
+
+.wl-inv {
+  padding: 9px 0;
+  border-bottom: 1px solid var(--hairline);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.wl-inv-head { display: flex; align-items: center; gap: 8px; }
+.wl-inv-amt { font-size: 12px; font-weight: 700; }
+.wl-inv-usd { font-size: 11px; color: var(--text-faint); margin-inline-start: auto; }
+.wl-addr {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 5px 7px;
+  font-size: 10px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.wl-addr:hover { background: var(--card-hover); color: var(--text); }
+
+/* Compact-width overrides for surfaces originally laid out for a wide pane. */
+.dw-body .mkt-grid { grid-template-columns: 1fr; }
+.dw-body .custom-form-grid { grid-template-columns: 1fr; }
+.killswitch-banner { font-size: 11px; padding: 7px 10px; gap: 7px; }
+
+/* Region chips in the evasion settings */
+.chip-row { display: flex; gap: 5px; flex-wrap: wrap; }
+.chip-row .chip {
+  font-family: inherit;
+  font-size: 10px;
+  padding: 3px 8px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  cursor: pointer;
+}
+.chip-row .chip:hover:not(:disabled) { background: var(--card-hover); color: var(--text); }
+.chip-row .chip.on { color: var(--signal); border-color: var(--signal-dim); background: var(--signal-tint); }
+.chip-row .chip:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.evasion-note {
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+  padding: 7px 9px;
+  margin-top: 4px;
+  background: var(--card);
+  border-inline-start: 2px solid var(--signal-dim);
+  font-size: 11px;
+  color: var(--text-faint);
+  line-height: 1.45;
+}
+
+/* Numeric inputs in the evasion settings (Brutal line-speed) */
+.num-input {
+  width: 62px;
+  padding: 4px 6px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 11px;
+  text-align: right;
+}
+.num-input:focus { outline: none; border-color: var(--signal-dim); }
+
+/* Compact drawer: at ~310px usable width a select next to a text column
+   squeezes the label into one word per line. Stack every setting-row
+   vertically inside the drawer so the label gets the full width and the
+   control sits beneath it. */
+.dw-body .setting-row {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 7px;
+}
+.dw-body .setting-row .setting-select { width: 100%; }
+.dw-body .setting-row .chip-row { justify-content: flex-start; }
+/* Toggles must stay label-left / switch-right, not stacked. */
+.dw-body .setting-row:has(.switch) {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}

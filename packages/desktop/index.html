@@ -2,7 +2,12 @@
 <html lang="en" dir="ltr">
   <head>
     <meta charset="UTF-8" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:" />
+    <!-- connect-src is the only outbound-capable directive here, and it is
+         deliberately narrow: the marketplace/payments backend over TLS, plus
+         loopback for running that backend locally in development. Plain http
+         to arbitrary hosts stays blocked, so a malicious config name or
+         listing can't turn the renderer into an exfiltration channel. -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:; connect-src 'self' https: http://localhost:* http://127.0.0.1:*" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/png" href="/icon.png" />
     <title>FIST</title>

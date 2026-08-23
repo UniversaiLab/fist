@@ -309,10 +309,15 @@ const APP_ICON_PATH = path.join(__dirname, 'assets', 'icon.ico');
 
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 880,
-    height: 880,
-    minWidth: 720,
-    minHeight: 720,
+    // Compact utility-window proportions, like the mainstream VPN clients:
+    // a narrow always-at-hand panel rather than a full desktop app window.
+    // The locations list and the settings panes are overlays inside this
+    // footprint instead of side-by-side columns.
+    width: 380,
+    height: 640,
+    minWidth: 360,
+    minHeight: 560,
+    maxWidth: 520,
     backgroundColor: '#0a0d13',
     autoHideMenuBar: true,
     icon: APP_ICON_PATH,
@@ -328,7 +333,8 @@ function createWindow() {
   });
 
   mainWindow.setMenuBarVisibility(false);
-  mainWindow.setAspectRatio(1); // the UI is designed as a 1:1 square, restored on unmaximize/leave-fullscreen below
+  // No aspect lock: the compact layout is a tall panel that stretches
+  // vertically, not the old 1:1 square.
 
   mainWindow.once('ready-to-show', () => {
     const settings = getSettings();
@@ -347,9 +353,30 @@ function createWindow() {
   const indexPath = path.join(__dirname, '..', 'dist', 'index.html');
   mainWindow.loadFile(indexPath);
 
+  // Hand off to the real browser, but only for schemes that are safe to pass
+  // to the OS. shell.openExternal will happily act on file:// (and on Windows
+  // UNC paths), which would let attacker-influenced text in the renderer --
+  // a config name, a marketplace listing, an extension description -- launch
+  // a local file. Anything that isn't plain web/mail is dropped.
+  const EXTERNAL_SCHEMES = new Set(['http:', 'https:', 'mailto:']);
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url);
+    try {
+      if (EXTERNAL_SCHEMES.has(new URL(url).protocol)) shell.openExternal(url);
+    } catch { /* unparseable URL -- ignore */ }
     return { action: 'deny' };
+  });
+
+  // The renderer only ever loads our own bundled index.html. Any attempt to
+  // navigate it somewhere else (an injected link, a redirect) would replace
+  // the trusted origin that holds the IPC bridge, so refuse and send it to
+  // the browser instead.
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    if (url !== mainWindow.webContents.getURL()) {
+      event.preventDefault();
+      try {
+        if (EXTERNAL_SCHEMES.has(new URL(url).protocol)) shell.openExternal(url);
+      } catch { /* unparseable URL -- ignore */ }
+    }
   });
 
   const sendWindowState = () => {
@@ -360,12 +387,10 @@ function createWindow() {
       });
     }
   };
-  // Maximize/fullscreen fill the whole screen, so the 1:1 lock has to relax
-  // for that duration and snap back the moment the window is a normal square again.
-  mainWindow.on('maximize', () => { mainWindow.setAspectRatio(0); sendWindowState(); });
-  mainWindow.on('unmaximize', () => { mainWindow.setAspectRatio(1); sendWindowState(); });
-  mainWindow.on('enter-full-screen', () => { mainWindow.setAspectRatio(0); sendWindowState(); });
-  mainWindow.on('leave-full-screen', () => { mainWindow.setAspectRatio(1); sendWindowState(); });
+  mainWindow.on('maximize', sendWindowState);
+  mainWindow.on('unmaximize', sendWindowState);
+  mainWindow.on('enter-full-screen', sendWindowState);
+  mainWindow.on('leave-full-screen', sendWindowState);
   mainWindow.webContents.once('did-finish-load', sendWindowState);
 
   mainWindow.on('close', (e) => {
@@ -453,11 +478,52 @@ async function connect(profileId) {
     const preferredHttp = settings.httpPort === socksPort ? settings.httpPort + 1 : settings.httpPort;
     const httpPort = await findFreePort(preferredHttp);
     const apiPort = await findFreePort(API_PORT === socksPort || API_PORT === httpPort ? httpPort + 1 : API_PORT);
+    // Auto-failover tiers: other saved servers, best-protocol-first, so a
+    // censor killing one transport (e.g. throttling UDP and taking out
+    // Hysteria2) moves traffic to a surviving tier without user action.
+    // Deliberately capped -- each tier is a live outbound sing-box probes.
+    let fallbackProfiles;
+    if (settings.autoFallback) {
+      const TIER_ORDER = { hysteria2: 0, vless: 1, trojan: 2, vmess: 3, shadowsocks: 4 };
+      fallbackProfiles = store.get('profiles', [])
+        .filter((p) => p.id !== profileId
+          && p.protocol !== 'mtproto' && p.protocol !== 'wireguard'
+          && p.network !== 'kcp'
+          && p.engine !== 'extension' && p.protocol !== 'extension')
+        .sort((a, b) => (TIER_ORDER[a.protocol] ?? 9) - (TIER_ORDER[b.protocol] ?? 9))
+        .slice(0, 3);
+    }
+
     const config = buildSingboxConfig(profile, {
       socksPort, httpPort, apiPort, mode, logLevel: settings.singboxLogLevel,
       socksHost: settings.socksHost, httpHost: settings.httpHost,
       socksAccounts: settings.socksUsername ? [{ user: settings.socksUsername, pass: settings.socksPassword || '' }] : undefined,
       httpAccounts: settings.httpUsername ? [{ user: settings.httpUsername, pass: settings.httpPassword || '' }] : undefined,
+      // Censorship-resistance layers (see settingsSchema.js).
+      utlsFingerprint: settings.utlsFingerprint,
+      dnsMode: settings.dnsMode,
+      remoteDns: settings.remoteDns,
+      localDns: settings.localDns,
+      dnsStrategy: settings.dnsStrategy,
+      tlsFragment: settings.tlsFragment,
+      routingMode: settings.routingMode,
+      directRuleSets: settings.directRuleSets,
+      blockAds: settings.blockAds,
+      tunStack: settings.tunStack,
+      fallbackProfiles,
+      // Advanced power features (require server support; off by default).
+      mux: settings.muxEnabled ? {
+        enabled: true,
+        protocol: settings.muxProtocol,
+        padding: settings.muxPadding,
+        maxConnections: settings.muxMaxConnections,
+        brutalUp: settings.brutalUpMbps,
+        brutalDown: settings.brutalDownMbps,
+      } : undefined,
+      udpOverTcp: settings.udpOverTcp,
+      tlsRecordFragment: settings.tlsRecordFragment,
+      tlsHandshakeFragment: settings.tlsHandshakeFragment,
+      ech: settings.ech,
     });
     // Connecting only starts the local proxy (sing-box) -- System Proxy is a
     // fully separate, user-controlled toggle (see systemProxy:enable/disable
@@ -752,7 +818,10 @@ ipcMain.handle('profiles:addFile', async (_e) => {
   const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow, {
     title: 'Import Config File',
     filters: [
-      { name: 'Supported configs', extensions: ['fist', 'conf', 'txt'] },
+      // npvt/npv4/inpv are NapsternetV exports -- readable when they're a
+      // plain-text export, and given a specific explanation when they're the
+      // app's encrypted container (see parseNapsternetFile).
+      { name: 'Supported configs', extensions: ['fist', 'conf', 'txt', 'json', 'npvt', 'npv4', 'inpv'] },
       { name: 'All files', extensions: ['*'] },
     ],
     properties: ['openFile'],
@@ -766,6 +835,10 @@ ipcMain.handle('profiles:addFile', async (_e) => {
     throw new Error('Could not read the selected file');
   }
 
+  // parseConfigText throws its own specific message for formats we recognise
+  // but cannot decode (an encrypted NapsternetV file being the case that
+  // motivated this) -- let that reach the user instead of flattening it into
+  // the generic "no supported configs" below.
   const parsed = parseConfigText(text);
   if (!parsed.length) throw new Error('No supported configs found in that file');
 
@@ -1109,7 +1182,30 @@ const LOG_LEVELS = new Set(['none', 'error', 'warn', 'info', 'debug']);
 const BOOLEAN_SETTINGS = new Set([
   'launchOnStartup', 'runLocalProxyOnStartup', 'startMinimized', 'restorePreviousSession',
   'minimizeToTray', 'autoReconnect', 'killSwitchEnabled',
+  'tlsFragment', 'blockAds', 'autoFallback',
+  'muxEnabled', 'muxPadding', 'udpOverTcp', 'tlsRecordFragment', 'tlsHandshakeFragment', 'ech',
 ]);
+// Bandwidth caps for TCP Brutal / mux connection count: non-negative integers
+// with a sane ceiling so a typo can't ask sing-box for absurd values.
+const NUMERIC_SETTINGS = {
+  brutalUpMbps: 10000,
+  brutalDownMbps: 10000,
+  muxMaxConnections: 64,
+};
+// Enumerated censorship-resistance settings -- rejected unless they name a
+// mode the config builder actually understands, so a bad value can never
+// reach sing-box and break the tunnel.
+const ENUM_SETTINGS = {
+  utlsFingerprint: new Set(['none', 'chrome', 'firefox', 'safari', 'ios', 'android', 'edge', 'random']),
+  dnsMode: new Set(['off', 'secure', 'fakeip']),
+  dnsStrategy: new Set(['prefer_ipv4', 'prefer_ipv6', 'ipv4_only', 'ipv6_only']),
+  routingMode: new Set(['global', 'smart']),
+  tunStack: new Set(['mixed', 'system', 'gvisor']),
+  muxProtocol: new Set(['h2mux', 'smux', 'yamux']),
+};
+// Rule-set names become URLs, so restrict them to the charset the upstream
+// repo actually uses rather than interpolating arbitrary text into a URL.
+const RULE_SET_NAME_RE = /^[a-z0-9][a-z0-9-]{0,40}$/;
 const PORT_SETTINGS = new Set(['socksPort', 'httpPort']);
 const HOST_SETTINGS = new Set(['socksHost', 'httpHost']);
 const TEXT_SETTINGS = new Set(['socksUsername', 'socksPassword', 'httpUsername', 'httpPassword']);
@@ -1145,6 +1241,15 @@ ipcMain.handle('settings:update', async (_e, patch) => {
       if (typeof value !== 'string' || value.length > 256) continue;
     } else if (key === 'customBypass') {
       if (typeof value !== 'string' || value.length > 2000) continue;
+    } else if (ENUM_SETTINGS[key]) {
+      if (!ENUM_SETTINGS[key].has(value)) continue;
+    } else if (key === 'directRuleSets') {
+      if (!Array.isArray(value) || value.length > 12) continue;
+      if (!value.every((n) => typeof n === 'string' && RULE_SET_NAME_RE.test(n))) continue;
+    } else if (key === 'remoteDns' || key === 'localDns') {
+      if (typeof value !== 'string' || value.length > 256 || !value.trim()) continue;
+    } else if (NUMERIC_SETTINGS[key]) {
+      if (typeof value !== 'number' || !Number.isInteger(value) || value < 0 || value > NUMERIC_SETTINGS[key]) continue;
     }
     clean[key] = value;
   }

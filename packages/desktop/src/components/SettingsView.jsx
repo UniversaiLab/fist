@@ -4,6 +4,7 @@ import CoreLogic from '@soul-connection/core-logic';
 const { formatBytes } = CoreLogic;
 import { Section, Toggle } from './settingsPrimitives.jsx';
 import NetworkSettings from './NetworkSettings.jsx';
+import EvasionSettings from './EvasionSettings.jsx';
 
 const INTERVAL_OPTIONS = [
   { value: 0, label: 'Off' },
@@ -31,7 +32,7 @@ function updaterStatusHint(updaterStatus) {
 }
 
 export default function SettingsView({
-  settings, connectionState, profiles, appInfo, systemProxyEnabled,
+  settings, only, connectionState, profiles, appInfo, systemProxyEnabled,
   updaterStatus, onCheckForUpdates, onDownloadUpdate, onInstallUpdate,
   onUpdate, onUpdateChecked, onOpenLogsFolder,
   onExportBackup, onExportFist, onImportBackup, onResetUsage, onResetAllUsage,
@@ -39,10 +40,16 @@ export default function SettingsView({
   killSwitchBlocking,
 }) {
   const portsLocked = connectionState !== 'disconnected';
+  // The compact drawer splits these into two rail entries; `only` picks which
+  // half renders. Unset (the default) shows everything, so any other caller
+  // is unaffected.
+  const showGeneral = only !== 'network';
+  const showNetwork = only !== 'general';
   const totalUsage = (profiles || []).reduce((sum, p) => sum + (p.totalBytes || 0), 0);
 
   return (
     <div className="settings-view">
+      {showGeneral && (<>
       <Section title="Connection" icon="bolt" description="App behavior on launch and connect">
         <Toggle
           label="Launch on startup"
@@ -98,20 +105,32 @@ export default function SettingsView({
           </select>
         </div>
       </Section>
+      </>)}
 
-      <NetworkSettings
-        settings={settings}
-        connectionState={connectionState}
-        systemProxyEnabled={systemProxyEnabled}
-        killSwitchBlocking={killSwitchBlocking}
-        onUpdate={onUpdate}
-        onUpdateChecked={onUpdateChecked}
-        onSystemProxyEnable={onSystemProxyEnable}
-        onSystemProxyDisable={onSystemProxyDisable}
-        onOpenProxyFolder={onOpenProxyFolder}
-        onResetNetworkDefaults={onResetNetworkDefaults}
-      />
+      {showNetwork && (
+        <EvasionSettings
+          settings={settings}
+          connectionState={connectionState}
+          onUpdate={onUpdate}
+        />
+      )}
 
+      {showNetwork && (
+        <NetworkSettings
+          settings={settings}
+          connectionState={connectionState}
+          systemProxyEnabled={systemProxyEnabled}
+          killSwitchBlocking={killSwitchBlocking}
+          onUpdate={onUpdate}
+          onUpdateChecked={onUpdateChecked}
+          onSystemProxyEnable={onSystemProxyEnable}
+          onSystemProxyDisable={onSystemProxyDisable}
+          onOpenProxyFolder={onOpenProxyFolder}
+          onResetNetworkDefaults={onResetNetworkDefaults}
+        />
+      )}
+
+      {showGeneral && (<>
       <Section title="Data Usage" icon="database" description="Traffic used per server">
         <div className="setting-row">
           <div className="setting-text">
@@ -235,6 +254,7 @@ export default function SettingsView({
           )}
         </div>
       </Section>
+      </>)}
     </div>
   );
 }
