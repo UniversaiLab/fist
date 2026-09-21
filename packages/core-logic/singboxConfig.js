@@ -36,6 +36,27 @@ function transportSettings(p) {
 // `utlsDefault` is applied only when the profile itself doesn't pin a
 // fingerprint, so an explicitly-configured one always wins. Callers that pass
 // nothing (the server tester) keep the original behaviour exactly.
+// The uTLS fingerprints sing-box actually accepts. Config links in the wild
+// carry all sorts of values here -- `fp=unsafe`, `fp=randomised`, vendor
+// spellings -- because other clients quietly ignore what they don't know.
+// sing-box does NOT: an unknown fingerprint is a fatal startup error
+// ("unknown uTLS fingerprint: ..."), so passing one through verbatim turns a
+// working server into a config that can't connect at all. Anything
+// unrecognised therefore falls back to the app's default instead.
+const VALID_FINGERPRINTS = new Set([
+  'chrome', 'firefox', 'edge', 'safari', '360', 'qq', 'ios', 'android', 'random', 'randomized',
+]);
+
+function pickFingerprint(profileFp, utlsDefault) {
+  const wanted = String(profileFp || '').trim().toLowerCase();
+  if (VALID_FINGERPRINTS.has(wanted)) return wanted;
+  const fallback = String(utlsDefault || '').trim().toLowerCase();
+  if (VALID_FINGERPRINTS.has(fallback)) return fallback;
+  // An explicit 'none' default means "don't emit utls at all"; so does having
+  // neither a usable profile value nor a usable default.
+  return null;
+}
+
 function tlsSettings(p, utlsDefault, tlsOpts) {
   if (p.security !== 'tls' && p.security !== 'reality') return undefined;
   const tls = {
@@ -44,8 +65,8 @@ function tlsSettings(p, utlsDefault, tlsOpts) {
     insecure: !!p.allowInsecure,
   };
   if (p.alpn) tls.alpn = p.alpn.split(',').map((s) => s.trim()).filter(Boolean);
-  if (p.fingerprint) tls.utls = { enabled: true, fingerprint: p.fingerprint };
-  else if (utlsDefault && utlsDefault !== 'none') tls.utls = { enabled: true, fingerprint: utlsDefault };
+  const fp = pickFingerprint(p.fingerprint, utlsDefault);
+  if (fp) tls.utls = { enabled: true, fingerprint: fp };
   if (p.security === 'reality') {
     tls.reality = {
       enabled: true,
