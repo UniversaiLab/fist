@@ -556,6 +556,23 @@ async function connect(profileId) {
     connectedAt = Date.now();
     reconnectAttempts = 0;
     connectionState = 'connected';
+
+    // Route the machine's traffic through the tunnel we just started.
+    // Without this, "Connected" only means a local SOCKS/HTTP proxy is
+    // listening -- nothing actually uses it, so the user's IP is unchanged
+    // and blocked sites stay blocked, which reads as "the VPN doesn't work".
+    // Full Tunnel (TUN) already captures traffic at the OS level and needs no
+    // system-proxy entry, so this only applies to proxy mode. Failure here is
+    // non-fatal: the tunnel is up and reachable manually via the local ports.
+    if (mode === 'proxy' && getSettings().autoSystemProxy) {
+      try {
+        await systemProxy.enable('127.0.0.1', httpPort, systemProxy.buildBypass(getSettings().customBypass));
+        store.set('systemProxyEnabled', true);
+      } catch (err) {
+        notify('FIST', `Connected, but the system proxy could not be set: ${err.message}`);
+      }
+    }
+
     sendState();
     notify('FIST', `Connected to "${profile.name}"`);
     if (getSettings().killSwitchEnabled) {
@@ -1203,7 +1220,7 @@ ipcMain.handle('settings:get', () => getSettings());
 const LOG_LEVELS = new Set(['none', 'error', 'warn', 'info', 'debug']);
 const BOOLEAN_SETTINGS = new Set([
   'launchOnStartup', 'runLocalProxyOnStartup', 'startMinimized', 'restorePreviousSession',
-  'minimizeToTray', 'autoReconnect', 'killSwitchEnabled',
+  'minimizeToTray', 'autoReconnect', 'killSwitchEnabled', 'autoSystemProxy',
   'tlsFragment', 'blockAds', 'autoFallback',
   'muxEnabled', 'muxPadding', 'udpOverTcp', 'tlsRecordFragment', 'tlsHandshakeFragment', 'ech',
 ]);

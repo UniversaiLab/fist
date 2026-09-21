@@ -10,6 +10,11 @@ const DEFAULT_SETTINGS = {
   startMinimized: false,
   restorePreviousSession: false, // renderer-owned UI state; main just persists/exposes it
   minimizeToTray: true,
+  // Point the OS at the local proxy automatically when connecting in proxy
+  // mode. Without it, "Connected" only means a local listener is up and the
+  // user's traffic still goes out untunnelled -- the classic "it says
+  // connected but my IP didn't change" trap. Full Tunnel doesn't need it.
+  autoSystemProxy: true,
   autoReconnect: true,
   killSwitchEnabled: false,
   subAutoUpdateInterval: 0, // ms; 0 = off

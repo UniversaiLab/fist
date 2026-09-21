@@ -3864,3 +3864,43 @@ kbd {
   justify-content: space-between;
   gap: 12px;
 }
+
+/* Meta rows that are actually controls (Kill Switch, System Proxy). They
+   keep the plain-row look but gain affordance on hover. */
+.ck-meta-action {
+  width: 100%;
+  font-family: inherit;
+  font-size: inherit;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--hairline);
+  cursor: pointer;
+  text-align: start;
+}
+.ck-meta-action:last-child { border-bottom: 0; }
+.ck-meta-action:hover:not(:disabled) { background: var(--card); }
+.ck-meta-action:hover:not(:disabled) .ck-meta-label { color: var(--text); }
+.ck-meta-action:disabled { cursor: not-allowed; opacity: 0.55; }
+/* "Off" on System Proxy means traffic is NOT protected -- don't let it read
+   as a calm neutral state. */
+.ck-meta-val.warn { color: var(--warn); }
+
+/* Connected-but-not-routed warning. */
+.ck-warn {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  width: 100%;
+  margin-top: 10px;
+  padding: 8px 9px;
+  font-family: inherit;
+  font-size: 11px;
+  line-height: 1.45;
+  text-align: start;
+  color: var(--warn);
+  background: rgba(240, 182, 74, 0.08);
+  border: 1px solid rgba(240, 182, 74, 0.35);
+  cursor: pointer;
+}
+.ck-warn:hover { background: rgba(240, 182, 74, 0.14); }
+.ck-warn b { color: var(--text); }
