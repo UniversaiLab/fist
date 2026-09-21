@@ -440,9 +440,27 @@ async function connect(profileId) {
   if (connectionState === 'connected' || connectionState === 'connecting') {
     await disconnect();
   }
+  const mode = store.get('connectionMode', 'tun');
+
+  // Full Tunnel needs root to create the TUN device and install routes.
+  // Elevation happens here rather than at startup: relaunchElevated exits
+  // this process as soon as the pkexec/UAC helper spawns, so doing it before
+  // a window exists means a failed prompt makes the app disappear with no
+  // way to report why. Asking on an explicit Connect keeps the failure
+  // visible and attributable.
+  if (mode === 'tun' && !usesExtension && !(await isElevated())) {
+    notify('Administrator Access Required', 'Full Tunnel needs administrator/root access. The app will reopen with it…');
+    const relaunched = await relaunchElevated(app);
+    if (!relaunched) {
+      connectionState = 'disconnected';
+      sendState();
+      throw new Error('Full Tunnel needs administrator/root access. Approve the prompt, or start the app with elevated privileges.');
+    }
+    return; // this instance is exiting; the elevated one takes over
+  }
+
   connectionState = 'connecting';
   sendState();
-  const mode = store.get('connectionMode', 'tun');
   const settings = getSettings();
 
   // Plug-and-play path: an extension owns everything about this connection
@@ -725,18 +743,15 @@ app.whenReady().then(async () => {
     store.set('systemProxyEnabled', false);
   }
 
-  // If we're persisted in tunnel mode from a previous session but this launch
-  // isn't elevated, re-launch elevated before ever showing a window -- avoids
-  // a flash of a window that can't actually connect in tunnel mode.
-  const persistedMode = store.get('connectionMode', 'tun');
-  if (persistedMode === 'tun' && !(await isElevated())) {
-    const relaunched = await relaunchElevated(app);
-    if (relaunched) return; // this instance is exiting; the elevated one takes over
-    // UAC prompt was declined or failed -- fall back to proxy mode instead of
-    // exiting with no window ever shown.
-    store.set('connectionMode', 'tun');
-    notify('Administrator Access Denied', 'Full Tunnel mode requires administrator/root access. The app opened in System Proxy mode instead.');
-  }
+  // Deliberately NOT elevating here. Full Tunnel is the only mode now, so
+  // every launch would hit this path -- and relaunchElevated exits this
+  // process the moment the pkexec/UAC helper *spawns*, long before the
+  // elevated instance is known to have started. If that helper then fails
+  // (no PolicyKit agent, prompt dismissed, elevated launch errors), the app
+  // has already quit and nothing comes back: it just vanishes at startup.
+  //
+  // Elevation is requested when the user actually connects instead, where
+  // there's a window to report failure in.
 
   createWindow();
   createTray();
@@ -841,7 +856,6 @@ ipcMain.handle('settings:setMode', async (_e, mode) => {
     notify('Relaunching with Administrator Access', 'Full Tunnel mode requires administrator/root access. The app will reopen shortly…');
     const relaunched = await relaunchElevated(app);
     if (!relaunched) {
-      store.set('connectionMode', 'tun');
       throw new Error('You must approve the administrator/root access request to enable Full Tunnel mode');
     }
     return mode; // unreachable in practice -- app.exit() fires inside relaunchElevated
