@@ -580,6 +580,8 @@ export default function App() {
           onToggle={handleToggleConnect}
           onSetMode={handleSetMode}
           onOpenLocations={() => setLocationsOpen(true)}
+          onToggleSystemProxy={systemProxyEnabled ? handleSystemProxyDisable : handleSystemProxyEnable}
+          onToggleKillSwitch={() => handleUpdateSettings({ killSwitchEnabled: !settings?.killSwitchEnabled })}
         />
 
         <LocationsPanel

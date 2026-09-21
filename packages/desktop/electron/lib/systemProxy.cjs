@@ -123,7 +123,10 @@ function linuxBypassList(bypass) {
 
 async function linuxEnable(host, port, bypass) {
   if (!(await gsettingsAvailable())) {
-    throw new Error('System proxy is not supported on this desktop environment (gsettings not found)');
+    // gsettings is the GNOME proxy store; KDE/XFCE/bare WMs don't have it.
+    // Full Tunnel captures traffic at the OS level and needs no per-desktop
+    // support, so point there rather than leaving a dead end.
+    throw new Error('System proxy needs GNOME settings (gsettings), which this desktop does not provide. Switch to Full Tunnel mode to route all traffic instead.');
   }
   await run('gsettings', ['set', 'org.gnome.system.proxy', 'mode', 'manual']);
   for (const kind of ['http', 'https']) {

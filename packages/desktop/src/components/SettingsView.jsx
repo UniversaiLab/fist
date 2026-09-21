@@ -76,6 +76,12 @@ export default function SettingsView({
           onChange={(v) => onUpdate({ minimizeToTray: v })}
         />
         <Toggle
+          label="Route system traffic automatically"
+          hint="On connecting, point this computer at the tunnel. Turn off if you'd rather configure apps against the local proxy ports yourself."
+          checked={settings.autoSystemProxy}
+          onChange={(v) => onUpdate({ autoSystemProxy: v })}
+        />
+        <Toggle
           label="Auto-reconnect"
           hint="Automatically retries connecting if the tunnel drops unexpectedly"
           checked={settings.autoReconnect}
