@@ -10,11 +10,6 @@ const DEFAULT_SETTINGS = {
   startMinimized: false,
   restorePreviousSession: false, // renderer-owned UI state; main just persists/exposes it
   minimizeToTray: true,
-  // Point the OS at the local proxy automatically when connecting in proxy
-  // mode. Without it, "Connected" only means a local listener is up and the
-  // user's traffic still goes out untunnelled -- the classic "it says
-  // connected but my IP didn't change" trap. Full Tunnel doesn't need it.
-  autoSystemProxy: true,
   autoReconnect: true,
   killSwitchEnabled: false,
   subAutoUpdateInterval: 0, // ms; 0 = off
@@ -39,8 +34,11 @@ const DEFAULT_SETTINGS = {
   // that flag a stock Go handshake. 'none' restores the raw handshake.
   utlsFingerprint: 'chrome',
   // 'off' | 'secure' (DoH through the tunnel) | 'fakeip' (also answer
-  // locally and carry the domain inside the tunnel -- no lookup escapes)
-  dnsMode: 'off',
+  // locally and carry the domain inside the tunnel -- no lookup escapes).
+  // Defaults to fakeip: Full Tunnel captures the OS's DNS traffic, so without
+  // our own resolver those queries would either go nowhere or leak straight
+  // to the ISP's resolver, which is the first thing a censor watches.
+  dnsMode: 'fakeip',
   remoteDns: 'https://1.1.1.1/dns-query',
   localDns: '223.5.5.5',
   dnsStrategy: 'prefer_ipv4',

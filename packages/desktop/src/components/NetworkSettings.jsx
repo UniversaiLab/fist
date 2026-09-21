@@ -135,23 +135,6 @@ export default function NetworkSettings({
             <span className="setting-hint">{localProxyRunning ? 'Running' : 'Stopped — connect to a server to start it'}</span>
           </div>
         </div>
-        <div className="setting-row">
-          <div className="setting-text">
-            <span className="setting-label net-status-label">
-              <span className={`status-dot ${systemProxyEnabled ? 'connected' : ''}`} />
-              System proxy
-            </span>
-            <span className="setting-hint">{systemProxyEnabled ? 'Active — the system is using the local proxy' : 'Off'}</span>
-          </div>
-          <div className="net-btn-row">
-            <button className="btn icon-inline-btn" disabled={!localProxyRunning || systemProxyEnabled || busy} onClick={handleSystemProxyEnable}>
-              <Icon name="power" size={13} /> Set System Proxy
-            </button>
-            <button className="btn icon-inline-btn" disabled={!systemProxyEnabled || busy} onClick={handleSystemProxyDisable}>
-              <Icon name="stop" size={13} /> Reset
-            </button>
-          </div>
-        </div>
       </Section>
 
       <Section title="Local Proxy — Manual Setup" icon="wifi" description="Address, port, and optional authentication for SOCKS5 and HTTP">

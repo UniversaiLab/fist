@@ -70,7 +70,7 @@ export default function App() {
   const [profiles, setProfiles] = useState([]);
   const [subscriptions, setSubscriptions] = useState([]);
   const [activeProfileId, setActiveProfileId] = useState(null);
-  const [connectionMode, setConnectionMode] = useState('proxy');
+  const [connectionMode, setConnectionMode] = useState('tun');
   const [connectionState, setConnectionState] = useState('disconnected');
   const [connectedAt, setConnectedAt] = useState(null);
   const [latencyMs, setLatencyMs] = useState(null);
@@ -576,11 +576,8 @@ export default function App() {
           connectionMode={connectionMode}
           activeProfile={activeProfile}
           settings={settings}
-          systemProxyEnabled={systemProxyEnabled}
           onToggle={handleToggleConnect}
-          onSetMode={handleSetMode}
           onOpenLocations={() => setLocationsOpen(true)}
-          onToggleSystemProxy={systemProxyEnabled ? handleSystemProxyDisable : handleSystemProxyEnable}
           onToggleKillSwitch={() => handleUpdateSettings({ killSwitchEnabled: !settings?.killSwitchEnabled })}
         />
 

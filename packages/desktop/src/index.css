@@ -3904,3 +3904,6 @@ kbd {
 }
 .ck-warn:hover { background: rgba(240, 182, 74, 0.14); }
 .ck-warn b { color: var(--text); }
+
+/* The routing-mode chip is informational now (Full Tunnel is the only mode). */
+.ck-chip.static { cursor: default; opacity: 0.85; }

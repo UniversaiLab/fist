@@ -176,7 +176,7 @@ function buildTrayMenu() {
   const busy = connectionState === 'connecting' || connectionState === 'disconnecting';
   const activeId = store.get('activeProfileId');
   const profile = findProfile(activeId);
-  const mode = store.get('connectionMode', 'proxy');
+  const mode = store.get('connectionMode', 'tun');
   const allProfiles = store.get('profiles', []);
 
   const serverItems = allProfiles.slice(0, TRAY_SERVER_LIST_LIMIT).map((p) => ({
@@ -442,7 +442,7 @@ async function connect(profileId) {
   }
   connectionState = 'connecting';
   sendState();
-  const mode = store.get('connectionMode', 'proxy');
+  const mode = store.get('connectionMode', 'tun');
   const settings = getSettings();
 
   // Plug-and-play path: an extension owns everything about this connection
@@ -503,7 +503,7 @@ async function connect(profileId) {
         .slice(0, 3);
     }
 
-    const config = buildSingboxConfig(profile, {
+    const buildConfig = (overrides = {}) => buildSingboxConfig(profile, {
       socksPort, httpPort, apiPort, mode, logLevel: settings.singboxLogLevel,
       // Emitting an API block this build can't serve makes sing-box refuse to
       // start outright, so ask only for what it was compiled with.
@@ -539,11 +539,26 @@ async function connect(profileId) {
       tlsRecordFragment: settings.tlsRecordFragment,
       tlsHandshakeFragment: settings.tlsHandshakeFragment,
       ech: settings.ech,
+      ...overrides,
     });
-    // Connecting only starts the local proxy (sing-box) -- System Proxy is a
-    // fully separate, user-controlled toggle (see systemProxy:enable/disable
-    // below) so flipping it on/off never restarts the tunnel.
-    await singbox.start(config);
+    const config = buildConfig();
+    // Full Tunnel's strict_route needs IPv6 policy routing. Hosts with IPv6
+    // disabled reject those rules and sing-box dies at startup with
+    // "address family not supported by protocol". Rather than leaving the
+    // user with a mode that simply refuses to work, retry once without it --
+    // auto_route still captures traffic, only the extra anti-leak rules are
+    // dropped, so say so instead of failing silently.
+    try {
+      await singbox.start(config);
+    } catch (err) {
+      const ipv6RuleFailure = mode === 'tun'
+        && /address family not supported|set rules|add rule/i.test(err.message || '');
+      if (!ipv6RuleFailure) throw err;
+      console.warn('[tun] strict_route unsupported on this host, retrying without it');
+      const relaxed = buildConfig({ tunStrictRoute: false });
+      await singbox.start(relaxed);
+      notify('FIST', 'Full Tunnel started with reduced leak protection (this system does not support strict routing).');
+    }
     store.set('activeProfileId', profileId);
     store.set('activeMode', mode);
     {
@@ -556,22 +571,6 @@ async function connect(profileId) {
     connectedAt = Date.now();
     reconnectAttempts = 0;
     connectionState = 'connected';
-
-    // Route the machine's traffic through the tunnel we just started.
-    // Without this, "Connected" only means a local SOCKS/HTTP proxy is
-    // listening -- nothing actually uses it, so the user's IP is unchanged
-    // and blocked sites stay blocked, which reads as "the VPN doesn't work".
-    // Full Tunnel (TUN) already captures traffic at the OS level and needs no
-    // system-proxy entry, so this only applies to proxy mode. Failure here is
-    // non-fatal: the tunnel is up and reachable manually via the local ports.
-    if (mode === 'proxy' && getSettings().autoSystemProxy) {
-      try {
-        await systemProxy.enable('127.0.0.1', httpPort, systemProxy.buildBypass(getSettings().customBypass));
-        store.set('systemProxyEnabled', true);
-      } catch (err) {
-        notify('FIST', `Connected, but the system proxy could not be set: ${err.message}`);
-      }
-    }
 
     sendState();
     notify('FIST', `Connected to "${profile.name}"`);
@@ -716,16 +715,26 @@ singbox.on('exit', handleEngineExit);
 app.whenReady().then(async () => {
   app.setAppUserModelId('com.fist.app');
 
+  // One-time migration off the old System Proxy mode. Earlier versions could
+  // leave the OS pointed at our local listener; now that Full Tunnel is the
+  // only routing mode, that setting would never be cleared by us again and
+  // the user would be stuck with a proxy entry aimed at a dead port -- i.e.
+  // no internet at all. Clear it once, on the first launch after upgrading.
+  if (store.get('systemProxyEnabled', false)) {
+    try { await systemProxy.disable(); } catch { /* best effort */ }
+    store.set('systemProxyEnabled', false);
+  }
+
   // If we're persisted in tunnel mode from a previous session but this launch
   // isn't elevated, re-launch elevated before ever showing a window -- avoids
   // a flash of a window that can't actually connect in tunnel mode.
-  const persistedMode = store.get('connectionMode', 'proxy');
+  const persistedMode = store.get('connectionMode', 'tun');
   if (persistedMode === 'tun' && !(await isElevated())) {
     const relaunched = await relaunchElevated(app);
     if (relaunched) return; // this instance is exiting; the elevated one takes over
     // UAC prompt was declined or failed -- fall back to proxy mode instead of
     // exiting with no window ever shown.
-    store.set('connectionMode', 'proxy');
+    store.set('connectionMode', 'tun');
     notify('Administrator Access Denied', 'Full Tunnel mode requires administrator/root access. The app opened in System Proxy mode instead.');
   }
 
@@ -808,7 +817,7 @@ ipcMain.handle('profiles:list', () => ({
   profiles: store.get('profiles', []),
   subscriptions: store.get('subscriptions', []),
   activeProfileId: store.get('activeProfileId', null),
-  connectionMode: store.get('connectionMode', 'proxy'),
+  connectionMode: store.get('connectionMode', 'tun'),
   connectionState,
   connectedAt,
   settings: getSettings(),
@@ -832,7 +841,7 @@ ipcMain.handle('settings:setMode', async (_e, mode) => {
     notify('Relaunching with Administrator Access', 'Full Tunnel mode requires administrator/root access. The app will reopen shortly…');
     const relaunched = await relaunchElevated(app);
     if (!relaunched) {
-      store.set('connectionMode', 'proxy');
+      store.set('connectionMode', 'tun');
       throw new Error('You must approve the administrator/root access request to enable Full Tunnel mode');
     }
     return mode; // unreachable in practice -- app.exit() fires inside relaunchElevated
@@ -1220,7 +1229,7 @@ ipcMain.handle('settings:get', () => getSettings());
 const LOG_LEVELS = new Set(['none', 'error', 'warn', 'info', 'debug']);
 const BOOLEAN_SETTINGS = new Set([
   'launchOnStartup', 'runLocalProxyOnStartup', 'startMinimized', 'restorePreviousSession',
-  'minimizeToTray', 'autoReconnect', 'killSwitchEnabled', 'autoSystemProxy',
+  'minimizeToTray', 'autoReconnect', 'killSwitchEnabled',
   'tlsFragment', 'blockAds', 'autoFallback',
   'muxEnabled', 'muxPadding', 'udpOverTcp', 'tlsRecordFragment', 'tlsHandshakeFragment', 'ech',
 ]);
