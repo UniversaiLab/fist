@@ -259,6 +259,39 @@ copy "$(go env GOPATH)\bin\sing-box.exe" packages\desktop\bin\win32\sing-box.exe
 Without this, the app still launches, but every "Connect" attempt fails
 with "The connection core (sing-box) file was not found."
 
+### Troubleshooting: "Electron failed to install correctly"
+
+The npm `electron` package is only a shim — its postinstall step downloads the
+real binary. If that download is skipped (`--ignore-scripts`) or blocked, every
+run fails with:
+
+```
+Error: Electron failed to install correctly, please delete
+node_modules/electron and try installing again
+```
+
+That message is misleading: reinstalling just repeats the same failed download,
+and the problem is almost always the network rather than the repo. `npm run
+dev`/`start`/`dist` now run `scripts/ensure-electron.cjs` first, which detects
+the broken install and re-downloads the binary automatically, falling back to a
+mirror if the default host is unreachable. You can also run it directly:
+
+```bash
+npm run ensure:electron -w packages/desktop
+```
+
+If your network blocks GitHub Releases (where Electron binaries are hosted),
+point it at a reachable mirror:
+
+```bash
+export ELECTRON_MIRROR="https://registry.npmmirror.com/-/binary/electron/"
+npm run dev
+```
+
+Already have the matching Electron zip? Point at the folder holding it with
+`ELECTRON_CACHE=/path/to/folder`. Behind a proxy, export `HTTPS_PROXY` /
+`HTTP_PROXY` before installing.
+
 ### 3. Run in dev mode
 
 ```bash
