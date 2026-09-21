@@ -373,9 +373,15 @@ function buildDnsConfig(opts) {
   // sing-box 1.12 replaced the old `address: "<url>"` server shape with typed
   // servers, and deprecated the legacy form for removal in 1.14 -- emit the
   // modern schema so this keeps working across engine upgrades.
+  // No `detour` on the direct resolver: sing-box refuses to start when a DNS
+  // server detours to a bare direct outbound ("detour to an empty direct
+  // outbound makes no sense"), and without a detour it already dials
+  // outside the tunnel, which is what "direct resolver" means. Note this is a
+  // *runtime* failure -- `sing-box check` accepts the detour form happily, so
+  // it only shows up when actually connecting.
   const servers = [
     { ...dnsServerSpec(remote), tag: 'dns-remote', detour: 'proxy' },
-    { ...dnsServerSpec(local), tag: 'dns-direct', detour: 'direct' },
+    { ...dnsServerSpec(local), tag: 'dns-direct' },
   ];
   const rules = [];
 
@@ -494,7 +500,12 @@ function buildSingboxConfig(profile, opts = {}) {
         : ['172.19.0.1/30'],
       mtu: 1500,
       auto_route: true,
-      strict_route: true,
+      // strict_route installs extra policy rules that close leak paths around
+      // the tunnel, but it needs IPv6 policy routing to be available. On hosts
+      // with IPv6 disabled sing-box dies at startup with "set rules: add rule
+      // 0/9: address family not supported by protocol", so the caller can turn
+      // it off (main.cjs retries automatically on that failure).
+      strict_route: opts.tunStrictRoute !== false,
       // gVisor's userspace netstack (this build has with_gvisor) survives
       // hostile/lossy links better than the system stack and doesn't need the
       // host's TCP stack to cooperate; 'system' stays available as a fallback
