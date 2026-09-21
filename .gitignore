@@ -5,3 +5,6 @@ build/
 release/
 *.log
 package-lock.json
+
+# sing-box runtime cache (clash_api cache_file)
+cache.db
