@@ -86,20 +86,46 @@ function macRelaunchElevated(app) {
 // ---- Linux ----
 // pkexec (PolicyKit) is the closest cross-desktop equivalent of UAC/the macOS
 // prompt: a native GUI password dialog on GNOME/KDE/most distros with
-// PolicyKit installed. Unlike execFile above, pkexec's own process stays
-// attached to (and waits on) whatever it launches, so waiting for it to exit
-// would block until the *elevated* app itself quits -- spawn it detached and
-// resolve as soon as the pkexec process itself has started, mirroring how the
-// Windows/macOS paths above also resolve before the user has necessarily
-// finished interacting with the prompt.
+// PolicyKit installed.
+//
+// Two things make a naive `spawn('pkexec', [exe])` fail badly here:
+//
+//  1. pkexec deliberately sanitises the environment, so the elevated process
+//     inherits no DISPLAY/XAUTHORITY and a GUI app simply cannot start. We
+//     therefore run it via `env` and re-supply exactly the variables needed to
+//     reach the user's X/Wayland session.
+//  2. pkexec stays attached to whatever it launches, so we can't wait for it
+//     to exit to learn whether it worked. Exiting ourselves the moment pkexec
+//     *spawns* (what this used to do) means a cancelled prompt, a missing
+//     PolicyKit agent, or an elevated process that dies on startup all leave
+//     the user with no app at all -- it just vanishes.
+//
+// So the elevated instance is asked to touch a ready-file, and we only exit
+// once we've actually seen it. If pkexec exits first, or nothing appears in
+// time, we report failure and the caller keeps the existing window open.
 function linuxIsElevated() {
   return Promise.resolve(typeof process.getuid === 'function' && process.getuid() === 0);
+}
+
+const READY_FLAG = '--fist-elevated-ready=';
+const READY_TIMEOUT_MS = 120000; // generous: the user has to type a password
+const READY_POLL_MS = 250;
+
+// Session variables the elevated GUI process needs; anything unset is skipped
+// rather than passed through as an empty value.
+function sessionEnvArgs() {
+  return ['DISPLAY', 'XAUTHORITY', 'WAYLAND_DISPLAY', 'XDG_RUNTIME_DIR', 'DBUS_SESSION_BUS_ADDRESS']
+    .filter((k) => process.env[k])
+    .map((k) => `${k}=${process.env[k]}`);
 }
 
 function linuxRelaunchElevated(app) {
   const exePath = process.execPath;
   const appPath = app.isPackaged ? null : app.getAppPath();
-  const args = appPath ? [exePath, appPath] : [exePath];
+  const readyFile = path.join(os.tmpdir(), `fist-elevated-${Date.now()}-${process.pid}`);
+
+  const target = appPath ? [exePath, appPath] : [exePath];
+  const args = ['env', ...sessionEnvArgs(), ...target, `${READY_FLAG}${readyFile}`];
 
   return new Promise((resolve) => {
     let child;
@@ -109,13 +135,43 @@ function linuxRelaunchElevated(app) {
       resolve(false);
       return;
     }
-    child.once('error', () => resolve(false));
-    child.once('spawn', () => {
-      child.unref();
-      app.exit(0);
-      resolve(true);
+
+    let settled = false;
+    const finish = (ok) => {
+      if (settled) return;
+      settled = true;
+      clearInterval(poll);
+      clearTimeout(timer);
+      try { fs.unlinkSync(readyFile); } catch { /* may not exist */ }
+      if (ok) {
+        child.unref();
+        app.exit(0);
+      }
+      resolve(ok);
+    };
+
+    // The elevated instance is up and has a window coming -- only now is it
+    // safe for this process to go away.
+    const poll = setInterval(() => {
+      if (fs.existsSync(readyFile)) finish(true);
+    }, READY_POLL_MS);
+
+    const timer = setTimeout(() => finish(false), READY_TIMEOUT_MS);
+
+    child.once('error', () => finish(false));
+    // pkexec exits non-zero when the prompt is dismissed or policy denies it.
+    // If it exits before the ready-file shows up, elevation did not happen.
+    child.once('exit', () => {
+      if (!fs.existsSync(readyFile)) finish(false);
     });
   });
+}
+
+// Called by the elevated instance at startup to tell its parent it's alive.
+function signalElevatedReady(argv) {
+  const arg = (argv || []).find((a) => a.startsWith(READY_FLAG));
+  if (!arg) return;
+  try { fs.writeFileSync(arg.slice(READY_FLAG.length), 'ready'); } catch { /* parent will time out */ }
 }
 
 function isElevated() {
@@ -130,4 +186,4 @@ function relaunchElevated(app) {
   return linuxRelaunchElevated(app);
 }
 
-module.exports = { isElevated, relaunchElevated };
+module.exports = { isElevated, relaunchElevated, signalElevatedReady };
