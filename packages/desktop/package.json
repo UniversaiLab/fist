@@ -16,13 +16,14 @@
     "dist:mac": "node scripts/build-exe.cjs --mac",
     "dist:linux": "node scripts/build-exe.cjs --linux",
     "ensure:electron": "node scripts/ensure-electron.cjs",
-    "predev": "node scripts/ensure-electron.cjs",
-    "prestart": "node scripts/ensure-electron.cjs",
-    "predist": "node scripts/ensure-electron.cjs",
-    "predist:portable": "node scripts/ensure-electron.cjs",
-    "predist:mac": "node scripts/ensure-electron.cjs",
-    "predist:linux": "node scripts/ensure-electron.cjs",
-    "predist:publish": "node scripts/ensure-electron.cjs"
+    "predev": "node scripts/ensure-electron.cjs && node scripts/ensure-singbox.cjs",
+    "prestart": "node scripts/ensure-electron.cjs && node scripts/ensure-singbox.cjs",
+    "predist": "node scripts/ensure-electron.cjs && node scripts/ensure-singbox.cjs",
+    "predist:portable": "node scripts/ensure-electron.cjs && node scripts/ensure-singbox.cjs",
+    "predist:mac": "node scripts/ensure-electron.cjs && node scripts/ensure-singbox.cjs",
+    "predist:linux": "node scripts/ensure-electron.cjs && node scripts/ensure-singbox.cjs",
+    "predist:publish": "node scripts/ensure-electron.cjs && node scripts/ensure-singbox.cjs",
+    "ensure:singbox": "node scripts/ensure-singbox.cjs"
   },
   "dependencies": {
     "@fontsource/space-mono": "^5.3.0",

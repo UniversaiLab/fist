@@ -19,7 +19,8 @@ const { fetchText } = require('./lib/fetchText.cjs');
 const { JsonStore } = require('./lib/store.cjs');
 const { findFreePort } = require('./lib/freePort.cjs');
 const { isElevated, relaunchElevated } = require('./lib/elevation.cjs');
-const { StatsClient } = require('./lib/statsApi.cjs');
+const { createStatsClient } = require('./lib/statsApi.cjs');
+const singboxCaps = require('./lib/singboxCaps.cjs');
 const { initUpdater, checkForUpdates, downloadUpdate, quitAndInstall } = require('./lib/updater.cjs');
 
 const API_PORT = 10810;
@@ -254,7 +255,8 @@ function updateTrafficPolling() {
   let last = { uplink: 0, downlink: 0, time: Date.now() };
 
   try {
-    statsClient = new StatsClient(ports.apiPort);
+    statsClient = createStatsClient(ports.apiPort, singboxCaps.capabilities(singboxBin).apiKind);
+    if (!statsClient) return; // binary serves no stats API -- tunnel still works
   } catch {
     return; // Stats are a nice-to-have; a failure here must not break the connection.
   }
@@ -426,7 +428,14 @@ async function connect(profileId) {
   }
   const usesExtension = profile.engine && profile.engine !== 'sing-box';
   if (!usesExtension && !fs.existsSync(singboxBin)) {
-    throw new Error('The connection core (sing-box) file was not found. Your antivirus may have removed or quarantined it. Please add the app folder to your antivirus exclusions and reinstall/relaunch the app.');
+    // The antivirus explanation only makes sense on Windows; on macOS/Linux
+    // the overwhelmingly likely cause is that the binary was never fetched
+    // (bin/ is gitignored and has to be installed separately).
+    throw new Error(
+      process.platform === 'win32'
+        ? 'The connection core (sing-box) was not found. Your antivirus may have removed or quarantined it. Add the app folder to your antivirus exclusions, then reinstall or relaunch the app.'
+        : `The connection core (sing-box) was not found at ${singboxBin}. Run "npm run ensure:singbox -w packages/desktop" to download it (see the README's "Get the sing-box binary" section).`
+    );
   }
   if (connectionState === 'connected' || connectionState === 'connecting') {
     await disconnect();
@@ -496,6 +505,12 @@ async function connect(profileId) {
 
     const config = buildSingboxConfig(profile, {
       socksPort, httpPort, apiPort, mode, logLevel: settings.singboxLogLevel,
+      // Emitting an API block this build can't serve makes sing-box refuse to
+      // start outright, so ask only for what it was compiled with.
+      apiKind: singboxCaps.capabilities(singboxBin).apiKind,
+      // Keep sing-box's cache next to its generated config, in the app's
+      // writable data dir, rather than beside the binary.
+      cacheFilePath: path.join(singboxWorkDir, 'cache.db'),
       socksHost: settings.socksHost, httpHost: settings.httpHost,
       socksAccounts: settings.socksUsername ? [{ user: settings.socksUsername, pass: settings.socksPassword || '' }] : undefined,
       httpAccounts: settings.httpUsername ? [{ user: settings.httpUsername, pass: settings.httpPassword || '' }] : undefined,
@@ -556,7 +571,14 @@ async function connect(profileId) {
       throw new Error('Full Tunnel mode requires running the app with administrator/root access');
     }
     if (err.code === 'ENOENT') {
-      throw new Error('The connection core (sing-box) file was not found. Your antivirus may have removed or quarantined it. Please add the app folder to your antivirus exclusions and reinstall/relaunch the app.');
+      // The antivirus explanation only makes sense on Windows; on macOS/Linux
+    // the overwhelmingly likely cause is that the binary was never fetched
+    // (bin/ is gitignored and has to be installed separately).
+    throw new Error(
+      process.platform === 'win32'
+        ? 'The connection core (sing-box) was not found. Your antivirus may have removed or quarantined it. Add the app folder to your antivirus exclusions, then reinstall or relaunch the app.'
+        : `The connection core (sing-box) was not found at ${singboxBin}. Run "npm run ensure:singbox -w packages/desktop" to download it (see the README's "Get the sing-box binary" section).`
+    );
     }
     throw err;
   }

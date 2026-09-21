@@ -229,10 +229,35 @@ npm install
 ### 2. Get the sing-box binary
 
 sing-box is FIST's actual connection engine, and its binary is **not**
-committed to the repo (`bin/` is gitignored — it's large, per-platform, and
-easy to rebuild). Build it yourself with the same version and build tags CI
-uses, so every feature (Hysteria2, WireGuard, the stats API, etc.) actually
-works:
+committed to the repo (`bin/` is gitignored — it's large and per-platform).
+You don't need to do anything manually: `npm run dev`/`start`/`dist` run
+`scripts/ensure-singbox.cjs` first, which downloads the official release for
+your platform into `packages/desktop/bin/<platform>/`. To run it on its own:
+
+```bash
+npm run ensure:singbox -w packages/desktop
+```
+
+If GitHub Releases is blocked on your network, point it at a mirror (it also
+tries a public proxy automatically, and falls back to building from source if
+Go is installed):
+
+```bash
+export SINGBOX_MIRROR="https://your-mirror/path-to-release-assets"
+npm run dev
+```
+
+#### Official release vs. source build
+
+The official releases ship `with_clash_api` but **not** `with_v2ray_api`.
+That matters: sing-box refuses to start at all if the config asks for an API
+its build doesn't include. FIST detects the binary's build tags at runtime
+(`electron/lib/singboxCaps.cjs`) and generates a config asking for whichever
+stats API is actually present, so an official download works fully —
+traffic counters included, served by the Clash API instead.
+
+If you'd rather build from source with the full tag set (this is what
+`ensure-singbox` falls back to when downloads fail):
 
 ```bash
 go install -tags "with_quic,with_grpc,with_utls,with_clash_api,with_v2ray_api,with_wireguard,with_gvisor" \
@@ -240,24 +265,7 @@ go install -tags "with_quic,with_grpc,with_utls,with_clash_api,with_v2ray_api,wi
 ```
 
 Then copy the built binary into `packages/desktop/bin/<platform>/`, matching
-`process.platform` values:
-
-```bash
-# Linux
-mkdir -p packages/desktop/bin/linux
-cp "$(go env GOPATH)/bin/sing-box" packages/desktop/bin/linux/sing-box
-
-# macOS
-mkdir -p packages/desktop/bin/darwin
-cp "$(go env GOPATH)/bin/sing-box" packages/desktop/bin/darwin/sing-box
-
-# Windows (PowerShell)
-mkdir packages\desktop\bin\win32
-copy "$(go env GOPATH)\bin\sing-box.exe" packages\desktop\bin\win32\sing-box.exe
-```
-
-Without this, the app still launches, but every "Connect" attempt fails
-with "The connection core (sing-box) file was not found."
+`process.platform` values (`linux`, `darwin`, `win32`).
 
 ### Troubleshooting: "Electron failed to install correctly"
 
