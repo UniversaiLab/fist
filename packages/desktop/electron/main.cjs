@@ -18,7 +18,7 @@ const { testLocalProxy } = require('./lib/localProxyTest.cjs');
 const { fetchText } = require('./lib/fetchText.cjs');
 const { JsonStore } = require('./lib/store.cjs');
 const { findFreePort } = require('./lib/freePort.cjs');
-const { isElevated, relaunchElevated } = require('./lib/elevation.cjs');
+const { isElevated, relaunchElevated, signalElevatedReady } = require('./lib/elevation.cjs');
 const { createStatsClient } = require('./lib/statsApi.cjs');
 const singboxCaps = require('./lib/singboxCaps.cjs');
 const { initUpdater, checkForUpdates, downloadUpdate, quitAndInstall } = require('./lib/updater.cjs');
@@ -732,6 +732,12 @@ singbox.on('exit', handleEngineExit);
 
 app.whenReady().then(async () => {
   app.setAppUserModelId('com.fist.app');
+
+  // If this instance was launched by the elevation helper, tell the process
+  // that spawned us that we're alive, so it can close itself. Until it sees
+  // this it deliberately stays open, so a failed elevation never leaves the
+  // user with no window at all.
+  signalElevatedReady(process.argv);
 
   // One-time migration off the old System Proxy mode. Earlier versions could
   // leave the OS pointed at our local listener; now that Full Tunnel is the
