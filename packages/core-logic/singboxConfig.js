@@ -549,19 +549,44 @@ function buildSingboxConfig(profile, opts = {}) {
 
   if (isWireguard) config.endpoints = [buildWireguardEndpoint(profile)];
 
-  // Traffic stats: sing-box's v2ray_api compatibility layer exposes the same
-  // StatsService gRPC contract xray-core does, which statsApi.cjs polls for
-  // live upload/download counters on the 'proxy' outbound. Endpoints (used
-  // for WireGuard) aren't outbounds, so this compatibility layer may not
-  // report live speed for a WireGuard connection even though the tunnel
-  // itself works -- not verified either way against a real WireGuard peer.
-  if (opts.apiPort) {
-    config.experimental = {
-      v2ray_api: {
-        listen: `127.0.0.1:${opts.apiPort}`,
-        stats: { enabled: true, outbounds: ['proxy'] },
-      },
-    };
+  // Traffic stats. Which API we ask for depends on what the binary in front
+  // of us was compiled with (see electron/lib/singboxCaps.cjs):
+  //
+  //   v2ray - the v2ray_api compatibility layer, same StatsService gRPC
+  //           contract xray-core exposes. Present in source builds using our
+  //           README's tag list.
+  //   clash - the Clash-compatible controller, which official sing-box
+  //           releases DO ship (they do not ship with_v2ray_api). Its
+  //           /connections endpoint carries the same cumulative counters.
+  //   none  - neither is compiled in, so emit no API block at all.
+  //
+  // Getting this wrong is fatal, not cosmetic: sing-box refuses to start if
+  // the config names an API its build can't serve, so a config asking for
+  // v2ray_api against an official release fails to connect entirely.
+  //
+  // Endpoints (used for WireGuard) aren't outbounds, so per-outbound stats
+  // may not report live speed for a WireGuard connection even though the
+  // tunnel itself works -- not verified either way against a real peer.
+  const apiKind = opts.apiKind || 'v2ray';
+  if (opts.apiPort && apiKind !== 'none') {
+    config.experimental = apiKind === 'clash'
+      ? {
+        clash_api: { external_controller: `127.0.0.1:${opts.apiPort}` },
+        // cache_file defaults to writing cache.db into the process's working
+        // directory, which is the folder holding the binary -- read-only in a
+        // packaged app on macOS/Windows. Pin it to a writable path instead.
+        cache_file: {
+          enabled: true,
+          store_fakeip: opts.dnsMode === 'fakeip',
+          ...(opts.cacheFilePath ? { path: opts.cacheFilePath } : {}),
+        },
+      }
+      : {
+        v2ray_api: {
+          listen: `127.0.0.1:${opts.apiPort}`,
+          stats: { enabled: true, outbounds: ['proxy'] },
+        },
+      };
   }
 
   return config;
