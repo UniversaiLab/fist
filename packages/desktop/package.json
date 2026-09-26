@@ -8,8 +8,8 @@
   "license": "MIT",
   "scripts": {
     "build:ui": "vite build",
-    "start": "npm run build:ui && electron .",
-    "dev": "vite build && electron .",
+    "start": "npm run build:ui && node scripts/run-electron.cjs",
+    "dev": "vite build && node scripts/run-electron.cjs",
     "dist": "node scripts/build-exe.cjs",
     "dist:publish": "node scripts/build-exe.cjs --publish",
     "dist:portable": "node scripts/build-exe.cjs --portable",

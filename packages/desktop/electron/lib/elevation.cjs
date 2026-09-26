@@ -124,7 +124,10 @@ function linuxRelaunchElevated(app) {
   const appPath = app.isPackaged ? null : app.getAppPath();
   const readyFile = path.join(os.tmpdir(), `fist-elevated-${Date.now()}-${process.pid}`);
 
-  const target = appPath ? [exePath, appPath] : [exePath];
+  // Chromium hard-refuses to start as root unless its sandbox is disabled
+  // ("Running as root without --no-sandbox is not supported"), so the
+  // elevated instance would die before ever signalling ready.
+  const target = appPath ? [exePath, '--no-sandbox', appPath] : [exePath, '--no-sandbox'];
   const args = ['env', ...sessionEnvArgs(), ...target, `${READY_FLAG}${readyFile}`];
 
   return new Promise((resolve) => {

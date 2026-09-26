@@ -19,6 +19,7 @@ const { fetchText } = require('./lib/fetchText.cjs');
 const { JsonStore } = require('./lib/store.cjs');
 const { findFreePort } = require('./lib/freePort.cjs');
 const { isElevated, relaunchElevated, signalElevatedReady } = require('./lib/elevation.cjs');
+const { invokingUser, chownPaths, chownTree, chownTreeOnExit } = require('./lib/invokingUser.cjs');
 const { createStatsClient } = require('./lib/statsApi.cjs');
 const singboxCaps = require('./lib/singboxCaps.cjs');
 const { initUpdater, checkForUpdates, downloadUpdate, quitAndInstall } = require('./lib/updater.cjs');
@@ -40,15 +41,26 @@ if (process.env.PORTABLE_EXECUTABLE_DIR) {
   app.setPath('userData', path.join(process.env.PORTABLE_EXECUTABLE_DIR, 'data'));
 }
 
+// Elevated for Full Tunnel on Linux (pkexec/sudo): keep reading and writing
+// the real user's data dir instead of root's empty one, and give every file
+// we touch back to them so the next unelevated launch can still write.
+const realUser = invokingUser();
+if (realUser) {
+  app.setPath('userData', path.join(realUser.home, '.config', path.basename(app.getPath('userData'))));
+}
+
 const userDataDir = app.getPath('userData');
 fs.mkdirSync(userDataDir, { recursive: true });
+chownPaths(realUser, [path.dirname(userDataDir)]);
+chownTree(realUser, userDataDir); // repairs leftovers from an earlier elevated run
+chownTreeOnExit(realUser, userDataDir); // and whatever Chromium writes while shutting down
 const store = new JsonStore(path.join(userDataDir, 'profiles.json'), {
   profiles: [],
   subscriptions: [],
   activeProfileId: null,
   settings: { ...DEFAULT_SETTINGS },
   systemProxyEnabled: false, // app-owned live state, not a user preference -- set only by systemProxy:enable/disable and the disconnect safety net
-});
+}, { onPersist: (paths) => chownPaths(realUser, paths) });
 
 // sing-box ships one binary per OS -- 'sing-box.exe' on Windows, extensionless
 // 'sing-box' on macOS/Linux, namespaced by platform so a dev checkout can hold
@@ -820,6 +832,13 @@ app.on('will-quit', async (e) => {
     store.flush();
   }
 });
+
+// Ctrl+C in the terminal (or a plain kill) should go through the same quit
+// path as the window: tear the tunnel down cleanly instead of leaving routes
+// pointing at a dead TUN device.
+for (const sig of ['SIGINT', 'SIGTERM']) {
+  process.on(sig, () => { isQuitting = true; app.quit(); });
+}
 
 // ---- IPC handlers ----
 
