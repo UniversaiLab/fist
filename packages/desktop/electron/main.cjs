@@ -20,6 +20,7 @@ const { JsonStore } = require('./lib/store.cjs');
 const { findFreePort } = require('./lib/freePort.cjs');
 const { isElevated, relaunchElevated, signalElevatedReady } = require('./lib/elevation.cjs');
 const { invokingUser, chownPaths, chownTree, chownTreeOnExit } = require('./lib/invokingUser.cjs');
+const linuxTun = require('./lib/linuxTun.cjs');
 const { createStatsClient } = require('./lib/statsApi.cjs');
 const singboxCaps = require('./lib/singboxCaps.cjs');
 const { initUpdater, checkForUpdates, downloadUpdate, quitAndInstall } = require('./lib/updater.cjs');
@@ -454,13 +455,30 @@ async function connect(profileId) {
   }
   const mode = store.get('connectionMode', 'tun');
 
-  // Full Tunnel needs root to create the TUN device and install routes.
-  // Elevation happens here rather than at startup: relaunchElevated exits
-  // this process as soon as the pkexec/UAC helper spawns, so doing it before
-  // a window exists means a failed prompt makes the app disappear with no
-  // way to report why. Asking on an explicit Connect keeps the failure
-  // visible and attributable.
-  if (mode === 'tun' && !usesExtension && !(await isElevated())) {
+  // Linux: the app stays a normal user process and only sing-box gets
+  // network rights (a capability-enabled system copy, installed once behind
+  // a pkexec prompt). Running the whole GUI as root breaks its access to the
+  // desktop session -- see lib/linuxTun.cjs.
+  singbox.singboxBinPath = singboxBin;
+  if (process.platform === 'linux' && mode === 'tun' && !usesExtension && !(await isElevated())) {
+    const tun = await linuxTun.ensure(singboxBin, {
+      onPrompt: () => notify('One-time Permission', 'Full Tunnel needs permission to manage network routes. Enter your password to allow it.'),
+    });
+    if (!tun.ok) {
+      connectionState = 'disconnected';
+      sendState();
+      throw new Error(tun.message);
+    }
+    singbox.singboxBinPath = tun.bin;
+  }
+
+  // Windows/macOS: Full Tunnel needs the whole app elevated to create the
+  // TUN device and install routes. Elevation happens here rather than at
+  // startup: relaunchElevated exits this process as soon as the UAC helper
+  // spawns, so doing it before a window exists means a failed prompt makes
+  // the app disappear with no way to report why. Asking on an explicit
+  // Connect keeps the failure visible and attributable.
+  if (process.platform !== 'linux' && mode === 'tun' && !usesExtension && !(await isElevated())) {
     notify('Administrator Access Required', 'Full Tunnel needs administrator/root access. The app will reopen with it…');
     const relaunched = await relaunchElevated(app);
     if (!relaunched) {
@@ -585,6 +603,9 @@ async function connect(profileId) {
         && /address family not supported|set rules|add rule/i.test(err.message || '');
       if (!ipv6RuleFailure) throw err;
       console.warn('[tun] strict_route unsupported on this host, retrying without it');
+      // The FATAL line arrives before the process has actually exited; wait
+      // for it, or the retry is refused with "sing-box is already running".
+      await singbox.stop();
       const relaxed = buildConfig({ tunStrictRoute: false });
       await singbox.start(relaxed);
       notify('FIST', 'Full Tunnel started with reduced leak protection (this system does not support strict routing).');
@@ -877,7 +898,8 @@ ipcMain.handle('settings:setMode', async (_e, mode) => {
   // like it did nothing.
   store.set('connectionMode', mode);
 
-  if (mode === 'tun' && !(await isElevated())) {
+  // Linux handles Full Tunnel permissions on Connect instead (lib/linuxTun.cjs).
+  if (process.platform !== 'linux' && mode === 'tun' && !(await isElevated())) {
     notify('Relaunching with Administrator Access', 'Full Tunnel mode requires administrator/root access. The app will reopen shortly…');
     const relaunched = await relaunchElevated(app);
     if (!relaunched) {
