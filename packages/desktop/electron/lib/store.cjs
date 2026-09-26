@@ -33,10 +33,13 @@ function readJson(filePath) {
 }
 
 class JsonStore {
-  constructor(filePath, defaults = {}) {
+  // `onPersist(paths)` runs after every successful write with the files it
+  // touched -- used to hand them back to the real user when running as root.
+  constructor(filePath, defaults = {}, { onPersist = null } = {}) {
     this.filePath = filePath;
     this.tmpPath = `${filePath}.tmp`;
     this.bakPath = `${filePath}.bak`;
+    this.onPersist = onPersist;
     this.data = { ...defaults };
     this._saveTimer = null;
     this._writing = false;
@@ -108,6 +111,10 @@ class JsonStore {
     // 3. Atomic swap. After this line either the whole new file is visible or
     // the whole old one still is.
     fs.renameSync(this.tmpPath, this.filePath);
+
+    if (this.onPersist) {
+      try { this.onPersist([this.filePath, this.bakPath]); } catch { /* best effort */ }
+    }
   }
 
   _writeNow() {
